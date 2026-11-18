@@ -1,0 +1,1653 @@
+generator client {
+  provider        = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["auth", "public"]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model audit_log_entries {
+  instance_id String?   @db.Uuid
+  id          String    @id @db.Uuid
+  payload     Json?     @db.Json
+  created_at  DateTime? @db.Timestamptz(6)
+  ip_address  String    @default("") @db.VarChar(64)
+
+  @@index([instance_id], map: "audit_logs_instance_id_idx")
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model custom_oauth_providers {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider_type           String
+  identifier              String    @unique
+  name                    String
+  client_id               String
+  client_secret           String
+  acceptable_client_ids   String[]  @default([])
+  scopes                  String[]  @default([])
+  pkce_enabled            Boolean   @default(true)
+  attribute_mapping       Json      @default("{}")
+  authorization_params    Json      @default("{}")
+  enabled                 Boolean   @default(true)
+  email_optional          Boolean   @default(false)
+  issuer                  String?
+  discovery_url           String?
+  skip_nonce_check        Boolean   @default(false)
+  cached_discovery        Json?
+  discovery_cached_at     DateTime? @db.Timestamptz(6)
+  authorization_url       String?
+  token_url               String?
+  userinfo_url            String?
+  jwks_uri                String?
+  created_at              DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime  @default(now()) @db.Timestamptz(6)
+  custom_claims_allowlist String[]  @default([])
+
+  @@index([created_at])
+  @@index([enabled])
+  @@index([identifier])
+  @@index([provider_type])
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model flow_state {
+  id                     String                 @id @db.Uuid
+  user_id                String?                @db.Uuid
+  auth_code              String?
+  code_challenge_method  code_challenge_method?
+  code_challenge         String?
+  provider_type          String
+  provider_access_token  String?
+  provider_refresh_token String?
+  created_at             DateTime?              @db.Timestamptz(6)
+  updated_at             DateTime?              @db.Timestamptz(6)
+  authentication_method  String
+  auth_code_issued_at    DateTime?              @db.Timestamptz(6)
+  invite_token           String?
+  referrer               String?
+  oauth_client_state_id  String?                @db.Uuid
+  linking_target_id      String?                @db.Uuid
+  email_optional         Boolean                @default(false)
+  saml_relay_states      saml_relay_states[]
+
+  @@index([created_at(sort: Desc)])
+  @@index([auth_code], map: "idx_auth_code")
+  @@index([user_id, authentication_method], map: "idx_user_id_auth_method")
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model identities {
+  provider_id     String
+  user_id         String    @db.Uuid
+  identity_data   Json
+  provider        String
+  last_sign_in_at DateTime? @db.Timestamptz(6)
+  created_at      DateTime? @db.Timestamptz(6)
+  updated_at      DateTime? @db.Timestamptz(6)
+  email           String?   @default(dbgenerated("lower((identity_data ->> 'email'::text))"))
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  users           users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([provider_id, provider], map: "identities_provider_id_provider_unique")
+  @@index([email])
+  @@index([user_id])
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model instances {
+  id              String    @id @db.Uuid
+  uuid            String?   @db.Uuid
+  raw_base_config String?
+  created_at      DateTime? @db.Timestamptz(6)
+  updated_at      DateTime? @db.Timestamptz(6)
+
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model mfa_amr_claims {
+  session_id            String   @db.Uuid
+  created_at            DateTime @db.Timestamptz(6)
+  updated_at            DateTime @db.Timestamptz(6)
+  authentication_method String
+  id                    String   @id(map: "amr_id_pk") @db.Uuid
+  sessions              sessions @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([session_id, authentication_method], map: "mfa_amr_claims_session_id_authentication_method_pkey")
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model mfa_challenges {
+  id                     String      @id @db.Uuid
+  factor_id              String      @db.Uuid
+  created_at             DateTime    @db.Timestamptz(6)
+  verified_at            DateTime?   @db.Timestamptz(6)
+  ip_address             String      @db.Inet
+  otp_code               String?
+  web_authn_session_data Json?
+  mfa_factors            mfa_factors @relation(fields: [factor_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "mfa_challenges_auth_factor_id_fkey")
+
+  @@index([created_at(sort: Desc)], map: "mfa_challenge_created_at_idx")
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model mfa_factors {
+  id                           String                  @id @db.Uuid
+  user_id                      String                  @db.Uuid
+  friendly_name                String?
+  factor_type                  factor_type
+  status                       factor_status
+  created_at                   DateTime                @db.Timestamptz(6)
+  updated_at                   DateTime                @db.Timestamptz(6)
+  secret                       String?
+  phone                        String?
+  last_challenged_at           DateTime?               @unique @db.Timestamptz(6)
+  web_authn_credential         Json?
+  web_authn_aaguid             String?                 @db.Uuid
+  last_webauthn_challenge_data Json?
+  mfa_challenges               mfa_challenges[]
+  users                        users                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mfa_recovery_code_sets       mfa_recovery_code_sets?
+
+  @@unique([user_id, phone], map: "unique_phone_factor_per_user")
+  @@index([user_id, created_at], map: "factor_id_created_at_idx")
+  @@index([user_id])
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model mfa_recovery_code_sets {
+  id                        String               @id @db.Uuid
+  user_id                   String               @unique @db.Uuid
+  mfa_factor_id             String               @unique @db.Uuid
+  failed_verification_count Int                  @default(0)
+  verification_locked_until DateTime?            @db.Timestamptz(6)
+  created_at                DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime             @default(now()) @db.Timestamptz(6)
+  mfa_factors               mfa_factors          @relation(fields: [mfa_factor_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                     users                @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mfa_recovery_codes        mfa_recovery_codes[]
+
+  @@schema("auth")
+}
+
+model mfa_recovery_codes {
+  id                       String                 @id @db.Uuid
+  mfa_recovery_code_set_id String                 @db.Uuid
+  code_hash                String
+  consumed_at              DateTime?              @db.Timestamptz(6)
+  created_at               DateTime               @default(now()) @db.Timestamptz(6)
+  mfa_recovery_code_sets   mfa_recovery_code_sets @relation(fields: [mfa_recovery_code_set_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([mfa_recovery_code_set_id], map: "mfa_recovery_codes_set_id_idx")
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model oauth_authorizations {
+  id                    String                     @id @db.Uuid
+  authorization_id      String                     @unique
+  client_id             String                     @db.Uuid
+  user_id               String?                    @db.Uuid
+  redirect_uri          String
+  scope                 String
+  state                 String?
+  resource              String?
+  code_challenge        String?
+  code_challenge_method code_challenge_method?
+  response_type         oauth_response_type        @default(code)
+  status                oauth_authorization_status @default(pending)
+  authorization_code    String?                    @unique
+  created_at            DateTime                   @default(now()) @db.Timestamptz(6)
+  expires_at            DateTime                   @default(dbgenerated("(now() + '00:03:00'::interval)")) @db.Timestamptz(6)
+  approved_at           DateTime?                  @db.Timestamptz(6)
+  nonce                 String?
+  oauth_clients         oauth_clients              @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                 users?                     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model oauth_client_states {
+  id            String   @id @db.Uuid
+  provider_type String
+  code_verifier String?
+  created_at    DateTime @db.Timestamptz(6)
+
+  @@index([created_at], map: "idx_oauth_client_states_created_at")
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model oauth_clients {
+  id                         String                  @id @db.Uuid
+  client_secret_hash         String?
+  registration_type          oauth_registration_type
+  redirect_uris              String
+  grant_types                String
+  client_name                String?
+  client_uri                 String?
+  logo_uri                   String?
+  created_at                 DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                @default(now()) @db.Timestamptz(6)
+  deleted_at                 DateTime?               @db.Timestamptz(6)
+  client_type                oauth_client_type       @default(confidential)
+  token_endpoint_auth_method String
+  oauth_authorizations       oauth_authorizations[]
+  oauth_consents             oauth_consents[]
+  sessions                   sessions[]
+
+  @@index([deleted_at])
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model oauth_consents {
+  id            String        @id @db.Uuid
+  user_id       String        @db.Uuid
+  client_id     String        @db.Uuid
+  scopes        String
+  granted_at    DateTime      @default(now()) @db.Timestamptz(6)
+  revoked_at    DateTime?     @db.Timestamptz(6)
+  oauth_clients oauth_clients @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users         users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, client_id], map: "oauth_consents_user_client_unique")
+  @@index([user_id, granted_at(sort: Desc)], map: "oauth_consents_user_order_idx")
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model one_time_tokens {
+  id         String              @id @db.Uuid
+  user_id    String              @db.Uuid
+  token_type one_time_token_type
+  token_hash String
+  relates_to String
+  created_at DateTime            @default(now()) @db.Timestamp(6)
+  updated_at DateTime            @default(now()) @db.Timestamp(6)
+  expires_at DateTime?           @db.Timestamptz(6)
+  users      users               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, token_type])
+  @@index([relates_to], map: "one_time_tokens_relates_to_hash_idx", type: Hash)
+  @@index([token_hash], map: "one_time_tokens_token_hash_hash_idx", type: Hash)
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model refresh_tokens {
+  instance_id String?   @db.Uuid
+  id          BigInt    @id @default(autoincrement())
+  token       String?   @unique(map: "refresh_tokens_token_unique") @db.VarChar(255)
+  user_id     String?   @db.VarChar(255)
+  revoked     Boolean?
+  created_at  DateTime? @db.Timestamptz(6)
+  updated_at  DateTime? @db.Timestamptz(6)
+  parent      String?   @db.VarChar(255)
+  session_id  String?   @db.Uuid
+  sessions    sessions? @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([instance_id])
+  @@index([instance_id, user_id])
+  @@index([parent])
+  @@index([session_id, revoked])
+  @@index([updated_at(sort: Desc)])
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model saml_providers {
+  id                String        @id @db.Uuid
+  sso_provider_id   String        @db.Uuid
+  entity_id         String        @unique
+  metadata_xml      String
+  metadata_url      String?
+  attribute_mapping Json?
+  created_at        DateTime?     @db.Timestamptz(6)
+  updated_at        DateTime?     @db.Timestamptz(6)
+  name_id_format    String?
+  sso_providers     sso_providers @relation(fields: [sso_provider_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([sso_provider_id])
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model saml_relay_states {
+  id              String        @id @db.Uuid
+  sso_provider_id String        @db.Uuid
+  request_id      String
+  for_email       String?
+  redirect_to     String?
+  created_at      DateTime?     @db.Timestamptz(6)
+  updated_at      DateTime?     @db.Timestamptz(6)
+  flow_state_id   String?       @db.Uuid
+  flow_state      flow_state?   @relation(fields: [flow_state_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sso_providers   sso_providers @relation(fields: [sso_provider_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([created_at(sort: Desc)])
+  @@index([for_email])
+  @@index([sso_provider_id])
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model schema_migrations {
+  version String @id @db.VarChar(255)
+
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model scim_tokens {
+  id              String        @id @db.Uuid
+  sso_provider_id String        @db.Uuid
+  token_hash      String        @unique
+  prefix          String
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  expires_at      DateTime?     @db.Timestamptz(6)
+  revoked_at      DateTime?     @db.Timestamptz(6)
+  last_used_at    DateTime?     @db.Timestamptz(6)
+  sso_providers   sso_providers @relation(fields: [sso_provider_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at])
+  @@index([revoked_at])
+  @@index([sso_provider_id])
+  @@schema("auth")
+}
+
+model scim_users {
+  id              String        @id @db.Uuid
+  sso_provider_id String        @db.Uuid
+  user_id         String?       @db.Uuid
+  resource        Json
+  user_name       String        @default(dbgenerated("lower((resource ->> 'userName'::text))"))
+  external_id     String?       @default(dbgenerated("(resource ->> 'externalId'::text)"))
+  active          Boolean       @default(dbgenerated("COALESCE(((resource ->> 'active'::text))::boolean, true)"))
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime      @default(now()) @db.Timestamptz(6)
+  deleted_at      DateTime?     @db.Timestamptz(6)
+  sso_providers   sso_providers @relation(fields: [sso_provider_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users?        @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([deleted_at])
+  @@index([sso_provider_id])
+  @@index([user_id])
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model sessions {
+  id                     String           @id @db.Uuid
+  user_id                String           @db.Uuid
+  created_at             DateTime?        @db.Timestamptz(6)
+  updated_at             DateTime?        @db.Timestamptz(6)
+  factor_id              String?          @db.Uuid
+  aal                    aal_level?
+  not_after              DateTime?        @db.Timestamptz(6)
+  refreshed_at           DateTime?        @db.Timestamp(6)
+  user_agent             String?
+  ip                     String?          @db.Inet
+  tag                    String?
+  oauth_client_id        String?          @db.Uuid
+  refresh_token_hmac_key String?
+  refresh_token_counter  BigInt?
+  scopes                 String?
+  mfa_amr_claims         mfa_amr_claims[]
+  refresh_tokens         refresh_tokens[]
+  oauth_clients          oauth_clients?   @relation(fields: [oauth_client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                  users            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([not_after(sort: Desc)])
+  @@index([oauth_client_id])
+  @@index([user_id])
+  @@index([user_id, created_at], map: "user_id_created_at_idx")
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model sso_domains {
+  id              String        @id @db.Uuid
+  sso_provider_id String        @db.Uuid
+  domain          String
+  created_at      DateTime?     @db.Timestamptz(6)
+  updated_at      DateTime?     @db.Timestamptz(6)
+  sso_providers   sso_providers @relation(fields: [sso_provider_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([sso_provider_id])
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model sso_providers {
+  id                String              @id @db.Uuid
+  resource_id       String?
+  created_at        DateTime?           @db.Timestamptz(6)
+  updated_at        DateTime?           @db.Timestamptz(6)
+  disabled          Boolean?
+  saml_providers    saml_providers[]
+  saml_relay_states saml_relay_states[]
+  scim_tokens       scim_tokens[]
+  scim_users        scim_users[]
+  sso_domains       sso_domains[]
+
+  @@index([resource_id], map: "sso_providers_resource_id_pattern_idx")
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model users {
+  instance_id                 String?                 @db.Uuid
+  id                          String                  @id @db.Uuid
+  aud                         String?                 @db.VarChar(255)
+  role                        String?                 @db.VarChar(255)
+  email                       String?                 @db.VarChar(255)
+  encrypted_password          String?                 @db.VarChar(255)
+  email_confirmed_at          DateTime?               @db.Timestamptz(6)
+  invited_at                  DateTime?               @db.Timestamptz(6)
+  confirmation_token          String?                 @db.VarChar(255)
+  confirmation_sent_at        DateTime?               @db.Timestamptz(6)
+  recovery_token              String?                 @db.VarChar(255)
+  recovery_sent_at            DateTime?               @db.Timestamptz(6)
+  email_change_token_new      String?                 @db.VarChar(255)
+  email_change                String?                 @db.VarChar(255)
+  email_change_sent_at        DateTime?               @db.Timestamptz(6)
+  last_sign_in_at             DateTime?               @db.Timestamptz(6)
+  raw_app_meta_data           Json?
+  raw_user_meta_data          Json?
+  is_super_admin              Boolean?
+  created_at                  DateTime?               @db.Timestamptz(6)
+  updated_at                  DateTime?               @db.Timestamptz(6)
+  phone                       String?                 @unique
+  phone_confirmed_at          DateTime?               @db.Timestamptz(6)
+  phone_change                String?                 @default("")
+  phone_change_token          String?                 @default("") @db.VarChar(255)
+  phone_change_sent_at        DateTime?               @db.Timestamptz(6)
+  confirmed_at                DateTime?               @default(dbgenerated("LEAST(email_confirmed_at, phone_confirmed_at)")) @db.Timestamptz(6)
+  email_change_token_current  String?                 @default("") @db.VarChar(255)
+  email_change_confirm_status Int?                    @default(0) @db.SmallInt
+  banned_until                DateTime?               @db.Timestamptz(6)
+  reauthentication_token      String?                 @default("") @db.VarChar(255)
+  reauthentication_sent_at    DateTime?               @db.Timestamptz(6)
+  is_sso_user                 Boolean                 @default(false)
+  deleted_at                  DateTime?               @db.Timestamptz(6)
+  is_anonymous                Boolean                 @default(false)
+  identities                  identities[]
+  mfa_factors                 mfa_factors[]
+  mfa_recovery_code_sets      mfa_recovery_code_sets?
+  oauth_authorizations        oauth_authorizations[]
+  oauth_consents              oauth_consents[]
+  one_time_tokens             one_time_tokens[]
+  scim_users                  scim_users[]
+  sessions                    sessions[]
+  webauthn_challenges         webauthn_challenges[]
+  webauthn_credentials        webauthn_credentials[]
+  profils_utilisateurs        profils_utilisateurs?
+
+  @@index([created_at(sort: Desc)], map: "idx_users_created_at_desc")
+  @@index([email], map: "idx_users_email")
+  @@index([last_sign_in_at(sort: Desc)], map: "idx_users_last_sign_in_at_desc")
+  @@index([instance_id])
+  @@index([is_anonymous])
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model webauthn_challenges {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String?  @db.Uuid
+  challenge_type String
+  session_data   Json
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  expires_at     DateTime @db.Timestamptz(6)
+  users          users?   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at])
+  @@index([user_id])
+  @@schema("auth")
+}
+
+model webauthn_credentials {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String    @db.Uuid
+  credential_id    Bytes     @unique
+  public_key       Bytes
+  attestation_type String    @default("")
+  aaguid           String?   @db.Uuid
+  sign_count       BigInt    @default(0)
+  transports       Json      @default("[]")
+  backup_eligible  Boolean   @default(false)
+  backed_up        Boolean   @default(false)
+  friendly_name    String    @default("")
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @db.Timestamptz(6)
+  last_used_at     DateTime? @db.Timestamptz(6)
+  users            users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id])
+  @@schema("auth")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model affectations {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                 String                      @db.Uuid
+  membre_id                 String                      @db.Uuid
+  departement_id            String                      @db.Uuid
+  commission_id             String?                     @db.Uuid
+  fonction                  String                      @default("membre") @db.VarChar(100)
+  date_debut                DateTime                    @default(dbgenerated("CURRENT_DATE")) @db.Date
+  date_fin                  DateTime?                   @db.Date
+  statut                    String                      @default("active") @db.VarChar(20)
+  enregistre_par            String?                     @db.Uuid
+  notes                     String?
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  commissions               commissions?                @relation(fields: [commission_id, departement_id], references: [id, departement_id], onUpdate: NoAction, map: "fk_affectations_commission")
+  departements              departements                @relation(fields: [departement_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_affectations_departement")
+  profils_utilisateurs      profils_utilisateurs?       @relation(fields: [enregistre_par, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_affectations_enregistreur")
+  membres                   membres                     @relation(fields: [membre_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_affectations_membre")
+  propositions_affectations propositions_affectations[]
+
+  @@unique([id, eglise_id], map: "uq_affectations_id_eglise")
+  @@index([commission_id], map: "idx_affectations_commission")
+  @@index([departement_id], map: "idx_affectations_departement")
+  @@index([eglise_id], map: "idx_affectations_eglise")
+  @@index([membre_id], map: "idx_affectations_membre")
+  @@index([statut], map: "idx_affectations_statut")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model commissions {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                 String                      @db.Uuid
+  departement_id            String                      @db.Uuid
+  code                      String                      @db.VarChar(30)
+  nom                       String                      @db.VarChar(150)
+  description               String?
+  statut                    String                      @default("actif") @db.VarChar(20)
+  date_creation             DateTime                    @default(dbgenerated("CURRENT_DATE")) @db.Date
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  affectations              affectations[]
+  departements              departements                @relation(fields: [departement_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_commissions_departement")
+  propositions_affectations propositions_affectations[]
+  utilisateur_roles         utilisateur_roles[]
+
+  @@unique([departement_id, code], map: "uq_commissions_code")
+  @@unique([id, departement_id], map: "uq_commissions_id_departement")
+  @@unique([departement_id, nom], map: "uq_commissions_nom")
+  @@index([departement_id], map: "idx_commissions_departement")
+  @@index([eglise_id], map: "idx_commissions_eglise")
+  @@index([statut], map: "idx_commissions_statut")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model departements {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                 String                      @db.Uuid
+  code                      String                      @db.VarChar(30)
+  nom                       String                      @db.VarChar(150)
+  description               String?
+  statut                    String                      @default("actif") @db.VarChar(20)
+  date_creation             DateTime                    @default(dbgenerated("CURRENT_DATE")) @db.Date
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  affectations              affectations[]
+  commissions               commissions[]
+  eglises                   eglises                     @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  propositions_affectations propositions_affectations[]
+  utilisateur_roles         utilisateur_roles[]
+
+  @@unique([eglise_id, code], map: "uq_departements_code")
+  @@unique([id, eglise_id], map: "uq_departements_id_eglise")
+  @@unique([eglise_id, nom], map: "uq_departements_nom")
+  @@index([eglise_id], map: "idx_departements_eglise")
+  @@index([statut], map: "idx_departements_statut")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_activites {
+  id                                                                                 String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                          String                          @db.Uuid
+  titre                                                                              String                          @db.VarChar(200)
+  description                                                                        String?
+  type_activite                                                                      String                          @db.VarChar(50)
+  date_debut                                                                         DateTime                        @db.Timestamptz(6)
+  date_fin                                                                           DateTime?                       @db.Timestamptz(6)
+  lieu                                                                               String?
+  budget_previsionnel                                                                Decimal?                        @db.Decimal(12, 2)
+  responsable_id                                                                     String?                         @db.Uuid
+  statut                                                                             String                          @default("brouillon") @db.VarChar(20)
+  valide_par                                                                         String?                         @db.Uuid
+  date_validation                                                                    DateTime?                       @db.Timestamptz(6)
+  rapport_apres_activite                                                             String?
+  created_at                                                                         DateTime                        @default(now()) @db.Timestamptz(6)
+  updated_at                                                                         DateTime                        @default(now()) @db.Timestamptz(6)
+  eglises                                                                            eglises                         @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_activites_responsable_idToprofils_utilisateurs profils_utilisateurs?           @relation("ecole_dimanche_activites_responsable_idToprofils_utilisateurs", fields: [responsable_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_activites_valide_parToprofils_utilisateurs     profils_utilisateurs?           @relation("ecole_dimanche_activites_valide_parToprofils_utilisateurs", fields: [valide_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_participations                                                      ecole_dimanche_participations[]
+
+  @@index([eglise_id, date_debut], map: "idx_ed_activites_dates")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_autorisations_recuperation {
+  id                                                                                  String                                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                           String                                    @db.Uuid
+  enfant_id                                                                           String                                    @db.Uuid
+  responsable_id                                                                      String                                    @db.Uuid
+  nom_complet_personne                                                                String                                    @db.VarChar(150)
+  telephone                                                                           String?                                   @db.VarChar(30)
+  lien_avec_enfant                                                                    String?                                   @db.VarChar(50)
+  numero_piece_identite                                                               String?                                   @db.VarChar(100)
+  photo_identite_url                                                                  String?
+  date_debut                                                                          DateTime                                  @default(dbgenerated("CURRENT_DATE")) @db.Date
+  date_fin                                                                            DateTime?                                 @db.Date
+  statut                                                                              String                                    @default("active") @db.VarChar(20)
+  created_at                                                                          DateTime                                  @default(now()) @db.Timestamptz(6)
+  updated_at                                                                          DateTime                                  @default(now()) @db.Timestamptz(6)
+  eglises                                                                             eglises                                   @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membres_ecole_dimanche_autorisations_recuperation_enfant_id_eglise_idTomembres      membres                                   @relation("ecole_dimanche_autorisations_recuperation_enfant_id_eglise_idTomembres", fields: [enfant_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_autorisation_enfant")
+  membres_ecole_dimanche_autorisations_recuperation_responsable_id_eglise_idTomembres membres                                   @relation("ecole_dimanche_autorisations_recuperation_responsable_id_eglise_idTomembres", fields: [responsable_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_autorisation_responsable")
+  ecole_dimanche_historique_recuperations                                             ecole_dimanche_historique_recuperations[]
+
+  @@index([enfant_id], map: "idx_ecole_autorisations_enfant")
+  @@index([responsable_id], map: "idx_ecole_autorisations_responsable")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_bulletins {
+  id                                                                             String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                      String                      @db.Uuid
+  inscription_id                                                                 String                      @db.Uuid
+  annee                                                                          Int
+  trimestre                                                                      Int                         @db.SmallInt
+  assiduite                                                                      String?
+  participation                                                                  String?
+  progression_biblique                                                           String?
+  points_forts                                                                   String?
+  difficultes                                                                    String?
+  recommandations                                                                String?
+  appreciation_generale                                                          String?
+  fichier_url                                                                    String?
+  genere_par                                                                     String?                     @db.Uuid
+  valide_par                                                                     String?                     @db.Uuid
+  date_validation                                                                DateTime?                   @db.Timestamptz(6)
+  statut                                                                         String                      @default("brouillon") @db.VarChar(20)
+  created_at                                                                     DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                                                                     DateTime                    @default(now()) @db.Timestamptz(6)
+  eglises                                                                        eglises                     @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_bulletins_genere_parToprofils_utilisateurs profils_utilisateurs?       @relation("ecole_dimanche_bulletins_genere_parToprofils_utilisateurs", fields: [genere_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_bulletins_valide_parToprofils_utilisateurs profils_utilisateurs?       @relation("ecole_dimanche_bulletins_valide_parToprofils_utilisateurs", fields: [valide_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_inscriptions                                                    ecole_dimanche_inscriptions @relation(fields: [inscription_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_bulletin_inscription")
+
+  @@unique([inscription_id, annee, trimestre], map: "uq_ed_bulletin_periode")
+  @@index([inscription_id, annee], map: "idx_ed_bulletins_inscription")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_classes {
+  id                               String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                        String                             @db.Uuid
+  niveau_id                        String                             @db.Uuid
+  nom                              String                             @db.VarChar(100)
+  description                      String?
+  age_minimum                      Int?
+  age_maximum                      Int?
+  capacite_maximale                Int?
+  statut                           String                             @default("active") @db.VarChar(20)
+  created_at                       DateTime                           @default(now()) @db.Timestamptz(6)
+  updated_at                       DateTime                           @default(now()) @db.Timestamptz(6)
+  eglises                          eglises                            @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_niveaux           ecole_dimanche_niveaux             @relation(fields: [niveau_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_classe_niveau")
+  ecole_dimanche_evaluations       ecole_dimanche_evaluations[]
+  ecole_dimanche_inscriptions      ecole_dimanche_inscriptions[]
+  ecole_dimanche_messages          ecole_dimanche_messages[]
+  ecole_dimanche_moniteurs_classes ecole_dimanche_moniteurs_classes[]
+  ecole_dimanche_seances_programme ecole_dimanche_seances_programme[]
+
+  @@unique([id, eglise_id], map: "uq_ecole_classe_id_eglise")
+  @@unique([eglise_id, nom], map: "uq_ecole_classe_nom")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_evaluations {
+  id                                   String                                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                            String                                 @db.Uuid
+  classe_id                            String?                                @db.Uuid
+  niveau_id                            String?                                @db.Uuid
+  titre                                String                                 @db.VarChar(200)
+  description                          String?
+  consignes                            String?
+  questions                            Json                                   @default("[]")
+  bareme                               Decimal?                               @db.Decimal(8, 2)
+  date_evaluation                      DateTime?                              @db.Date
+  cree_par                             String?                                @db.Uuid
+  statut                               String                                 @default("brouillon") @db.VarChar(20)
+  created_at                           DateTime                               @default(now()) @db.Timestamptz(6)
+  updated_at                           DateTime                               @default(now()) @db.Timestamptz(6)
+  profils_utilisateurs                 profils_utilisateurs?                  @relation(fields: [cree_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eglises                              eglises                                @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_classes               ecole_dimanche_classes?                @relation(fields: [classe_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_evaluation_classe")
+  ecole_dimanche_niveaux               ecole_dimanche_niveaux?                @relation(fields: [niveau_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_evaluation_niveau")
+  ecole_dimanche_resultats_evaluations ecole_dimanche_resultats_evaluations[]
+
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_historique_presences {
+  id                       String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                String                   @db.Uuid
+  presence_id              String                   @db.Uuid
+  ancien_statut            String?                  @db.VarChar(30)
+  nouveau_statut           String                   @db.VarChar(30)
+  commentaire              String?
+  modifie_par              String?                  @db.Uuid
+  date_modification        DateTime                 @default(now()) @db.Timestamptz(6)
+  eglises                  eglises                  @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs     profils_utilisateurs?    @relation(fields: [modifie_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_presences ecole_dimanche_presences @relation(fields: [presence_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_historique_presence")
+
+  @@index([presence_id], map: "idx_ecole_historique_presence")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_historique_recuperations {
+  id                                        String                                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                 String                                    @db.Uuid
+  autorisation_id                           String                                    @db.Uuid
+  enfant_id                                 String                                    @db.Uuid
+  nom_personne_recuperation                 String                                    @db.VarChar(150)
+  piece_verifiee                            Boolean                                   @default(false)
+  verifie_par                               String?                                   @db.Uuid
+  date_recuperation                         DateTime                                  @default(now()) @db.Timestamptz(6)
+  observations                              String?
+  created_at                                DateTime                                  @default(now()) @db.Timestamptz(6)
+  ecole_dimanche_autorisations_recuperation ecole_dimanche_autorisations_recuperation @relation(fields: [autorisation_id], references: [id], onUpdate: NoAction)
+  eglises                                   eglises                                   @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs                      profils_utilisateurs?                     @relation(fields: [verifie_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membres                                   membres                                   @relation(fields: [enfant_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_recuperation_enfant")
+
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_incidents {
+  id                                                                              String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                       String                      @db.Uuid
+  inscription_id                                                                  String                      @db.Uuid
+  type_incident                                                                   String                      @db.VarChar(40)
+  gravite                                                                         String                      @default("moderee") @db.VarChar(20)
+  date_incident                                                                   DateTime                    @default(now()) @db.Timestamptz(6)
+  lieu                                                                            String?
+  description                                                                     String
+  mesures_initiales                                                               String?
+  temoins                                                                         String?
+  pieces_jointes                                                                  Json                        @default("[]")
+  signale_par                                                                     String?                     @db.Uuid
+  parent_informe                                                                  Boolean                     @default(false)
+  parent_informe_le                                                               DateTime?                   @db.Timestamptz(6)
+  suivi                                                                           String?
+  statut                                                                          String                      @default("ouvert") @db.VarChar(20)
+  cloture_par                                                                     String?                     @db.Uuid
+  date_cloture                                                                    DateTime?                   @db.Timestamptz(6)
+  created_at                                                                      DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                                                                      DateTime                    @default(now()) @db.Timestamptz(6)
+  profils_utilisateurs_ecole_dimanche_incidents_cloture_parToprofils_utilisateurs profils_utilisateurs?       @relation("ecole_dimanche_incidents_cloture_parToprofils_utilisateurs", fields: [cloture_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eglises                                                                         eglises                     @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_incidents_signale_parToprofils_utilisateurs profils_utilisateurs?       @relation("ecole_dimanche_incidents_signale_parToprofils_utilisateurs", fields: [signale_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_inscriptions                                                     ecole_dimanche_inscriptions @relation(fields: [inscription_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_incident_inscription")
+
+  @@index([inscription_id, statut], map: "idx_ed_incidents_inscription")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_inscriptions {
+  id                                   String                                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                            String                                 @db.Uuid
+  membre_id                            String                                 @db.Uuid
+  classe_id                            String                                 @db.Uuid
+  date_inscription                     DateTime                               @default(dbgenerated("CURRENT_DATE")) @db.Date
+  date_fin                             DateTime?                              @db.Date
+  statut                               String                                 @default("active") @db.VarChar(20)
+  observations_administratives         String?
+  created_at                           DateTime                               @default(now()) @db.Timestamptz(6)
+  updated_at                           DateTime                               @default(now()) @db.Timestamptz(6)
+  ecole_dimanche_bulletins             ecole_dimanche_bulletins[]
+  ecole_dimanche_incidents             ecole_dimanche_incidents[]
+  eglises                              eglises                                @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_classes               ecole_dimanche_classes                 @relation(fields: [classe_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_inscription_classe")
+  membres                              membres                                @relation(fields: [membre_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_inscription_membre")
+  ecole_dimanche_messages              ecole_dimanche_messages[]
+  ecole_dimanche_observations          ecole_dimanche_observations[]
+  ecole_dimanche_participations        ecole_dimanche_participations[]
+  ecole_dimanche_presences             ecole_dimanche_presences[]
+  ecole_dimanche_propositions_niveau   ecole_dimanche_propositions_niveau[]
+  ecole_dimanche_resultats_evaluations ecole_dimanche_resultats_evaluations[]
+
+  @@unique([id, eglise_id], map: "uq_ecole_inscription_id_eglise")
+  @@index([classe_id], map: "idx_ecole_inscriptions_classe")
+  @@index([membre_id], map: "idx_ecole_inscriptions_membre")
+  @@index([eglise_id, statut], map: "idx_ecole_inscriptions_statut")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_lecons {
+  id                                                                          String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                   String                             @db.Uuid
+  titre                                                                       String                             @db.VarChar(200)
+  theme                                                                       String?                            @db.VarChar(200)
+  passage_biblique                                                            String?
+  objectifs                                                                   String?
+  contenu                                                                     String
+  versets_a_memoriser                                                         String?
+  questions_exercices                                                         String?
+  materiel_necessaire                                                         String?
+  niveau_id                                                                   String?                            @db.Uuid
+  age_minimum                                                                 Int?
+  age_maximum                                                                 Int?
+  statut                                                                      String                             @default("brouillon") @db.VarChar(20)
+  cree_par                                                                    String?                            @db.Uuid
+  valide_par                                                                  String?                            @db.Uuid
+  date_validation                                                             DateTime?                          @db.Timestamptz(6)
+  date_publication                                                            DateTime?                          @db.Timestamptz(6)
+  version                                                                     Int                                @default(1)
+  created_at                                                                  DateTime                           @default(now()) @db.Timestamptz(6)
+  updated_at                                                                  DateTime                           @default(now()) @db.Timestamptz(6)
+  profils_utilisateurs_ecole_dimanche_lecons_cree_parToprofils_utilisateurs   profils_utilisateurs?              @relation("ecole_dimanche_lecons_cree_parToprofils_utilisateurs", fields: [cree_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eglises                                                                     eglises                            @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_lecons_valide_parToprofils_utilisateurs profils_utilisateurs?              @relation("ecole_dimanche_lecons_valide_parToprofils_utilisateurs", fields: [valide_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_niveaux                                                      ecole_dimanche_niveaux?            @relation(fields: [niveau_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_lecon_niveau")
+  ecole_dimanche_seances_programme                                            ecole_dimanche_seances_programme[]
+  ecole_dimanche_versions_lecons                                              ecole_dimanche_versions_lecons[]
+
+  @@index([eglise_id, statut], map: "idx_ed_lecons_statut")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_messages {
+  id                                                                                 String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                          String                       @db.Uuid
+  inscription_id                                                                     String?                      @db.Uuid
+  classe_id                                                                          String?                      @db.Uuid
+  expediteur_id                                                                      String                       @db.Uuid
+  destinataire_id                                                                    String?                      @db.Uuid
+  type_message                                                                       String                       @default("individuel") @db.VarChar(30)
+  sujet                                                                              String?                      @db.VarChar(200)
+  contenu                                                                            String
+  pieces_jointes                                                                     Json                         @default("[]")
+  date_envoi                                                                         DateTime                     @default(now()) @db.Timestamptz(6)
+  statut                                                                             String                       @default("envoye") @db.VarChar(20)
+  created_at                                                                         DateTime                     @default(now()) @db.Timestamptz(6)
+  profils_utilisateurs_ecole_dimanche_messages_destinataire_idToprofils_utilisateurs profils_utilisateurs?        @relation("ecole_dimanche_messages_destinataire_idToprofils_utilisateurs", fields: [destinataire_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eglises                                                                            eglises                      @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_messages_expediteur_idToprofils_utilisateurs   profils_utilisateurs         @relation("ecole_dimanche_messages_expediteur_idToprofils_utilisateurs", fields: [expediteur_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_classes                                                             ecole_dimanche_classes?      @relation(fields: [classe_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_message_classe")
+  ecole_dimanche_inscriptions                                                        ecole_dimanche_inscriptions? @relation(fields: [inscription_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_message_inscription")
+
+  @@index([destinataire_id, date_envoi(sort: Desc)], map: "idx_ed_messages_destinataire")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_moniteurs_classes {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id              String                 @db.Uuid
+  membre_id              String                 @db.Uuid
+  classe_id              String                 @db.Uuid
+  fonction               String                 @default("moniteur") @db.VarChar(50)
+  date_debut             DateTime               @default(dbgenerated("CURRENT_DATE")) @db.Date
+  date_fin               DateTime?              @db.Date
+  statut                 String                 @default("actif") @db.VarChar(20)
+  created_at             DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime               @default(now()) @db.Timestamptz(6)
+  eglises                eglises                @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_classes ecole_dimanche_classes @relation(fields: [classe_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_moniteur_classe")
+  membres                membres                @relation(fields: [membre_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_moniteur_membre")
+
+  @@index([classe_id, statut], map: "idx_ed_moniteurs_classe")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_niveaux {
+  id                                                                                                                        String                               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                                                                 String                               @db.Uuid
+  code                                                                                                                      String                               @db.VarChar(50)
+  nom                                                                                                                       String                               @db.VarChar(100)
+  description                                                                                                               String?
+  ordre                                                                                                                     Int                                  @default(1)
+  statut                                                                                                                    String                               @default("actif") @db.VarChar(20)
+  created_at                                                                                                                DateTime                             @default(now()) @db.Timestamptz(6)
+  updated_at                                                                                                                DateTime                             @default(now()) @db.Timestamptz(6)
+  ecole_dimanche_classes                                                                                                    ecole_dimanche_classes[]
+  ecole_dimanche_evaluations                                                                                                ecole_dimanche_evaluations[]
+  ecole_dimanche_lecons                                                                                                     ecole_dimanche_lecons[]
+  eglises                                                                                                                   eglises                              @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_propositions_niveau_ecole_dimanche_propositions_niveau_ancien_niveau_id_eglise_idToecole_dimanche_niveaux  ecole_dimanche_propositions_niveau[] @relation("ecole_dimanche_propositions_niveau_ancien_niveau_id_eglise_idToecole_dimanche_niveaux")
+  ecole_dimanche_propositions_niveau_ecole_dimanche_propositions_niveau_nouveau_niveau_id_eglise_idToecole_dimanche_niveaux ecole_dimanche_propositions_niveau[] @relation("ecole_dimanche_propositions_niveau_nouveau_niveau_id_eglise_idToecole_dimanche_niveaux")
+
+  @@unique([eglise_id, code], map: "uq_ecole_niveau_code")
+  @@unique([id, eglise_id], map: "uq_ecole_niveau_id_eglise")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_notifications {
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id            String               @db.Uuid
+  destinataire_id      String               @db.Uuid
+  titre                String               @db.VarChar(200)
+  contenu              String
+  type_notification    String               @db.VarChar(40)
+  reference_id         String?              @db.Uuid
+  est_lue              Boolean              @default(false)
+  date_lecture         DateTime?            @db.Timestamptz(6)
+  created_at           DateTime             @default(now()) @db.Timestamptz(6)
+  profils_utilisateurs profils_utilisateurs @relation(fields: [destinataire_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eglises              eglises              @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([destinataire_id, est_lue, created_at(sort: Desc)], map: "idx_ed_notifications_destinataire")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_observations {
+  id                          String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                   String                      @db.Uuid
+  inscription_id              String                      @db.Uuid
+  type_observation            String                      @db.VarChar(40)
+  contenu                     String
+  niveau_confidentialite      String                      @default("parents") @db.VarChar(20)
+  observe_par                 String                      @db.Uuid
+  date_observation            DateTime                    @default(dbgenerated("CURRENT_DATE")) @db.Date
+  statut                      String                      @default("active") @db.VarChar(20)
+  created_at                  DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                    @default(now()) @db.Timestamptz(6)
+  eglises                     eglises                     @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs        profils_utilisateurs        @relation(fields: [observe_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_inscriptions ecole_dimanche_inscriptions @relation(fields: [inscription_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_observation_inscription")
+
+  @@index([eglise_id, date_observation], map: "idx_ecole_observations_date")
+  @@index([inscription_id], map: "idx_ecole_observations_inscription")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_participations {
+  id                          String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                   String                      @db.Uuid
+  activite_id                 String                      @db.Uuid
+  inscription_id              String                      @db.Uuid
+  statut_participation        String                      @default("inscrit") @db.VarChar(20)
+  consentement_parental       String                      @default("en_attente") @db.VarChar(20)
+  consentement_par            String?                     @db.Uuid
+  date_consentement           DateTime?                   @db.Timestamptz(6)
+  commentaire                 String?
+  created_at                  DateTime                    @default(now()) @db.Timestamptz(6)
+  ecole_dimanche_activites    ecole_dimanche_activites    @relation(fields: [activite_id], references: [id], onUpdate: NoAction)
+  profils_utilisateurs        profils_utilisateurs?       @relation(fields: [consentement_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eglises                     eglises                     @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_inscriptions ecole_dimanche_inscriptions @relation(fields: [inscription_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_participation_inscription")
+
+  @@unique([activite_id, inscription_id], map: "uq_ed_participation")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_presences {
+  id                                                                                            String                                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                                     String                                @db.Uuid
+  inscription_id                                                                                String                                @db.Uuid
+  date_presence                                                                                 DateTime                              @db.Date
+  type_activite                                                                                 String                                @default("cours") @db.VarChar(30)
+  statut                                                                                        String                                @default("absent_injustifie") @db.VarChar(30)
+  heure_arrivee                                                                                 DateTime?                             @db.Time(6)
+  heure_depart                                                                                  DateTime?                             @db.Time(6)
+  justification                                                                                 String?
+  justificatif_url                                                                              String?
+  justification_soumise_le                                                                      DateTime?                             @db.Timestamptz(6)
+  justification_validee_par                                                                     String?                               @db.Uuid
+  justification_validee_le                                                                      DateTime?                             @db.Timestamptz(6)
+  enregistre_par                                                                                String?                               @db.Uuid
+  observations                                                                                  String?
+  created_at                                                                                    DateTime                              @default(now()) @db.Timestamptz(6)
+  updated_at                                                                                    DateTime                              @default(now()) @db.Timestamptz(6)
+  ecole_dimanche_historique_presences                                                           ecole_dimanche_historique_presences[]
+  eglises                                                                                       eglises                               @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_presences_enregistre_parToprofils_utilisateurs            profils_utilisateurs?                 @relation("ecole_dimanche_presences_enregistre_parToprofils_utilisateurs", fields: [enregistre_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_presences_justification_validee_parToprofils_utilisateurs profils_utilisateurs?                 @relation("ecole_dimanche_presences_justification_validee_parToprofils_utilisateurs", fields: [justification_validee_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_inscriptions                                                                   ecole_dimanche_inscriptions           @relation(fields: [inscription_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_presence_inscription")
+
+  @@unique([inscription_id, date_presence, type_activite], map: "uq_ecole_presence_activite")
+  @@unique([id, eglise_id], map: "uq_ecole_presence_id_eglise")
+  @@index([eglise_id, date_presence], map: "idx_ecole_presences_date")
+  @@index([statut], map: "idx_ecole_presences_statut")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_programmes {
+  id                                                                              String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                       String                             @db.Uuid
+  annee                                                                           Int
+  titre                                                                           String                             @db.VarChar(200)
+  description                                                                     String?
+  statut                                                                          String                             @default("brouillon") @db.VarChar(20)
+  cree_par                                                                        String?                            @db.Uuid
+  valide_par                                                                      String?                            @db.Uuid
+  date_validation                                                                 DateTime?                          @db.Timestamptz(6)
+  created_at                                                                      DateTime                           @default(now()) @db.Timestamptz(6)
+  updated_at                                                                      DateTime                           @default(now()) @db.Timestamptz(6)
+  profils_utilisateurs_ecole_dimanche_programmes_cree_parToprofils_utilisateurs   profils_utilisateurs?              @relation("ecole_dimanche_programmes_cree_parToprofils_utilisateurs", fields: [cree_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eglises                                                                         eglises                            @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_programmes_valide_parToprofils_utilisateurs profils_utilisateurs?              @relation("ecole_dimanche_programmes_valide_parToprofils_utilisateurs", fields: [valide_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_seances_programme                                                ecole_dimanche_seances_programme[]
+
+  @@unique([eglise_id, annee], map: "uq_ed_programme_annee")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_propositions_niveau {
+  id                                                                                                            String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                                                     String                      @db.Uuid
+  inscription_id                                                                                                String                      @db.Uuid
+  ancien_niveau_id                                                                                              String?                     @db.Uuid
+  nouveau_niveau_id                                                                                             String                      @db.Uuid
+  propose_par                                                                                                   String?                     @db.Uuid
+  motif                                                                                                         String
+  statut                                                                                                        String                      @default("en_attente") @db.VarChar(20)
+  decide_par                                                                                                    String?                     @db.Uuid
+  date_decision                                                                                                 DateTime?                   @db.Timestamptz(6)
+  commentaire_decision                                                                                          String?
+  created_at                                                                                                    DateTime                    @default(now()) @db.Timestamptz(6)
+  profils_utilisateurs_ecole_dimanche_propositions_niveau_decide_parToprofils_utilisateurs                      profils_utilisateurs?       @relation("ecole_dimanche_propositions_niveau_decide_parToprofils_utilisateurs", fields: [decide_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  eglises                                                                                                       eglises                     @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profils_utilisateurs_ecole_dimanche_propositions_niveau_propose_parToprofils_utilisateurs                     profils_utilisateurs?       @relation("ecole_dimanche_propositions_niveau_propose_parToprofils_utilisateurs", fields: [propose_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_niveaux_ecole_dimanche_propositions_niveau_ancien_niveau_id_eglise_idToecole_dimanche_niveaux  ecole_dimanche_niveaux?     @relation("ecole_dimanche_propositions_niveau_ancien_niveau_id_eglise_idToecole_dimanche_niveaux", fields: [ancien_niveau_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_proposition_ancien_niveau")
+  ecole_dimanche_inscriptions                                                                                   ecole_dimanche_inscriptions @relation(fields: [inscription_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_proposition_inscription")
+  ecole_dimanche_niveaux_ecole_dimanche_propositions_niveau_nouveau_niveau_id_eglise_idToecole_dimanche_niveaux ecole_dimanche_niveaux      @relation("ecole_dimanche_propositions_niveau_nouveau_niveau_id_eglise_idToecole_dimanche_niveaux", fields: [nouveau_niveau_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_proposition_nouveau_niveau")
+
+  @@index([eglise_id, statut], map: "idx_ed_propositions_statut")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_responsables {
+  id                                                                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                             String    @db.Uuid
+  enfant_id                                                             String    @db.Uuid
+  responsable_id                                                        String    @db.Uuid
+  lien_avec_enfant                                                      String    @db.VarChar(50)
+  est_responsable_principal                                             Boolean   @default(false)
+  peut_consulter_dossier                                                Boolean   @default(true)
+  peut_recevoir_notifications                                           Boolean   @default(true)
+  peut_autoriser_activites                                              Boolean   @default(false)
+  peut_recuperer_enfant                                                 Boolean   @default(false)
+  restrictions                                                          String?
+  date_debut                                                            DateTime  @default(dbgenerated("CURRENT_DATE")) @db.Date
+  date_fin                                                              DateTime? @db.Date
+  statut                                                                String    @default("actif") @db.VarChar(20)
+  created_at                                                            DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at                                                            DateTime  @default(now()) @db.Timestamptz(6)
+  eglises                                                               eglises   @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membres_ecole_dimanche_responsables_responsable_id_eglise_idTomembres membres   @relation("ecole_dimanche_responsables_responsable_id_eglise_idTomembres", fields: [responsable_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_resp_adulte")
+  membres_ecole_dimanche_responsables_enfant_id_eglise_idTomembres      membres   @relation("ecole_dimanche_responsables_enfant_id_eglise_idTomembres", fields: [enfant_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ecole_resp_enfant")
+
+  @@unique([enfant_id, responsable_id, eglise_id], map: "uq_ecole_resp_relation")
+  @@index([responsable_id], map: "idx_ecole_responsables_adulte")
+  @@index([enfant_id], map: "idx_ecole_responsables_enfant")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_resultats_evaluations {
+  id                          String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                   String                      @db.Uuid
+  evaluation_id               String                      @db.Uuid
+  inscription_id              String                      @db.Uuid
+  note                        Decimal?                    @db.Decimal(8, 2)
+  appreciation                String?
+  competences_acquises        String?
+  points_a_renforcer          String?
+  corrections                 String?
+  evalue_par                  String?                     @db.Uuid
+  date_evaluation             DateTime                    @default(dbgenerated("CURRENT_DATE")) @db.Date
+  created_at                  DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                    @default(now()) @db.Timestamptz(6)
+  eglises                     eglises                     @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_evaluations  ecole_dimanche_evaluations  @relation(fields: [evaluation_id], references: [id], onUpdate: NoAction)
+  profils_utilisateurs        profils_utilisateurs?       @relation(fields: [evalue_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_inscriptions ecole_dimanche_inscriptions @relation(fields: [inscription_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_resultat_inscription")
+
+  @@unique([evaluation_id, inscription_id], map: "uq_ed_resultat")
+  @@index([inscription_id], map: "idx_ed_resultats_inscription")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_seances_programme {
+  id                        String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                 String                    @db.Uuid
+  programme_id              String                    @db.Uuid
+  classe_id                 String?                   @db.Uuid
+  lecon_id                  String?                   @db.Uuid
+  titre                     String                    @db.VarChar(200)
+  trimestre                 Int?                      @db.SmallInt
+  mois                      Int?                      @db.SmallInt
+  date_prevue               DateTime?                 @db.Date
+  objectifs                 String?
+  moniteur_id               String?                   @db.Uuid
+  statut                    String                    @default("prevue") @db.VarChar(20)
+  commentaire_moniteur      String?
+  created_at                DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                  @default(now()) @db.Timestamptz(6)
+  eglises                   eglises                   @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membres                   membres?                  @relation(fields: [moniteur_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_programmes ecole_dimanche_programmes @relation(fields: [programme_id], references: [id], onUpdate: NoAction)
+  ecole_dimanche_classes    ecole_dimanche_classes?   @relation(fields: [classe_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_seance_classe")
+  ecole_dimanche_lecons     ecole_dimanche_lecons?    @relation(fields: [lecon_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ed_seance_lecon")
+
+  @@index([eglise_id, date_prevue], map: "idx_ed_seances_date")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ecole_dimanche_versions_lecons {
+  id                    String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id             String                @db.Uuid
+  lecon_id              String                @db.Uuid
+  version               Int
+  contenu_snapshot      Json
+  modifie_par           String?               @db.Uuid
+  commentaire           String?
+  created_at            DateTime              @default(now()) @db.Timestamptz(6)
+  eglises               eglises               @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ecole_dimanche_lecons ecole_dimanche_lecons @relation(fields: [lecon_id], references: [id], onUpdate: NoAction)
+  profils_utilisateurs  profils_utilisateurs? @relation(fields: [modifie_par], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([lecon_id, version], map: "uq_ed_version_lecon")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model eglises {
+  id                                        String                                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nom                                       String                                      @db.VarChar(200)
+  sigle                                     String?                                     @unique @db.VarChar(30)
+  description                               String?
+  adresse                                   String?
+  ville                                     String?                                     @db.VarChar(100)
+  pays                                      String?                                     @default("Congo") @db.VarChar(100)
+  telephone                                 String?                                     @db.VarChar(30)
+  email                                     String?                                     @db.VarChar(150)
+  logo_url                                  String?
+  devise                                    String                                      @default("XAF") @db.VarChar(3)
+  fuseau_horaire                            String                                      @default("Africa/Brazzaville") @db.VarChar(50)
+  date_creation                             DateTime?                                   @db.Date
+  actif                                     Boolean                                     @default(true)
+  created_at                                DateTime                                    @default(now()) @db.Timestamptz(6)
+  updated_at                                DateTime                                    @default(now()) @db.Timestamptz(6)
+  departements                              departements[]
+  ecole_dimanche_activites                  ecole_dimanche_activites[]
+  ecole_dimanche_autorisations_recuperation ecole_dimanche_autorisations_recuperation[]
+  ecole_dimanche_bulletins                  ecole_dimanche_bulletins[]
+  ecole_dimanche_classes                    ecole_dimanche_classes[]
+  ecole_dimanche_evaluations                ecole_dimanche_evaluations[]
+  ecole_dimanche_historique_presences       ecole_dimanche_historique_presences[]
+  ecole_dimanche_historique_recuperations   ecole_dimanche_historique_recuperations[]
+  ecole_dimanche_incidents                  ecole_dimanche_incidents[]
+  ecole_dimanche_inscriptions               ecole_dimanche_inscriptions[]
+  ecole_dimanche_lecons                     ecole_dimanche_lecons[]
+  ecole_dimanche_messages                   ecole_dimanche_messages[]
+  ecole_dimanche_moniteurs_classes          ecole_dimanche_moniteurs_classes[]
+  ecole_dimanche_niveaux                    ecole_dimanche_niveaux[]
+  ecole_dimanche_notifications              ecole_dimanche_notifications[]
+  ecole_dimanche_observations               ecole_dimanche_observations[]
+  ecole_dimanche_participations             ecole_dimanche_participations[]
+  ecole_dimanche_presences                  ecole_dimanche_presences[]
+  ecole_dimanche_programmes                 ecole_dimanche_programmes[]
+  ecole_dimanche_propositions_niveau        ecole_dimanche_propositions_niveau[]
+  ecole_dimanche_responsables               ecole_dimanche_responsables[]
+  ecole_dimanche_resultats_evaluations      ecole_dimanche_resultats_evaluations[]
+  ecole_dimanche_seances_programme          ecole_dimanche_seances_programme[]
+  ecole_dimanche_versions_lecons            ecole_dimanche_versions_lecons[]
+  familles                                  familles[]
+  membres                                   membres[]
+  parametres_eglise                         parametres_eglise[]
+  profils_utilisateurs                      profils_utilisateurs[]
+  roles                                     roles[]
+  uce_app_records                           uce_app_records[]
+
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model familles {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id         String             @db.Uuid
+  code_famille      String             @db.VarChar(30)
+  nom_famille       String             @db.VarChar(150)
+  adresse           String?
+  telephone_contact String?            @db.VarChar(30)
+  description       String?
+  created_at        DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime           @default(now()) @db.Timestamptz(6)
+  eglises           eglises            @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membres_familles  membres_familles[]
+
+  @@unique([eglise_id, code_famille], map: "uq_code_famille")
+  @@unique([id, eglise_id], map: "uq_famille_id_eglise")
+  @@index([eglise_id], map: "idx_familles_eglise")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model membres {
+  id                                                                                                                    String                                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                                                             String                                      @db.Uuid
+  profil_utilisateur_id                                                                                                 String?                                     @unique @db.Uuid
+  numero_membre                                                                                                         String                                      @db.VarChar(30)
+  nom                                                                                                                   String                                      @db.VarChar(100)
+  postnom                                                                                                               String?                                     @db.VarChar(100)
+  prenom                                                                                                                String?                                     @db.VarChar(100)
+  sexe                                                                                                                  String?                                     @db.VarChar(20)
+  date_naissance                                                                                                        DateTime?                                   @db.Date
+  telephone                                                                                                             String?                                     @db.VarChar(30)
+  email                                                                                                                 String?                                     @db.VarChar(150)
+  adresse                                                                                                               String?
+  date_adhesion                                                                                                         DateTime?                                   @db.Date
+  statut                                                                                                                String                                      @default("visiteur") @db.VarChar(30)
+  photo_url                                                                                                             String?
+  created_at                                                                                                            DateTime                                    @default(now()) @db.Timestamptz(6)
+  updated_at                                                                                                            DateTime                                    @default(now()) @db.Timestamptz(6)
+  affectations                                                                                                          affectations[]
+  ecole_dimanche_autorisations_recuperation_ecole_dimanche_autorisations_recuperation_enfant_id_eglise_idTomembres      ecole_dimanche_autorisations_recuperation[] @relation("ecole_dimanche_autorisations_recuperation_enfant_id_eglise_idTomembres")
+  ecole_dimanche_autorisations_recuperation_ecole_dimanche_autorisations_recuperation_responsable_id_eglise_idTomembres ecole_dimanche_autorisations_recuperation[] @relation("ecole_dimanche_autorisations_recuperation_responsable_id_eglise_idTomembres")
+  ecole_dimanche_historique_recuperations                                                                               ecole_dimanche_historique_recuperations[]
+  ecole_dimanche_inscriptions                                                                                           ecole_dimanche_inscriptions[]
+  ecole_dimanche_moniteurs_classes                                                                                      ecole_dimanche_moniteurs_classes[]
+  ecole_dimanche_responsables_ecole_dimanche_responsables_responsable_id_eglise_idTomembres                             ecole_dimanche_responsables[]               @relation("ecole_dimanche_responsables_responsable_id_eglise_idTomembres")
+  ecole_dimanche_responsables_ecole_dimanche_responsables_enfant_id_eglise_idTomembres                                  ecole_dimanche_responsables[]               @relation("ecole_dimanche_responsables_enfant_id_eglise_idTomembres")
+  ecole_dimanche_seances_programme                                                                                      ecole_dimanche_seances_programme[]
+  profils_utilisateurs                                                                                                  profils_utilisateurs?                       @relation(fields: [profil_utilisateur_id, eglise_id], references: [id, eglise_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_membre_profil")
+  eglises                                                                                                               eglises                                     @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membres_familles                                                                                                      membres_familles[]
+  propositions_affectations                                                                                             propositions_affectations[]
+
+  @@unique([id, eglise_id], map: "uq_membre_id_eglise")
+  @@unique([profil_utilisateur_id, eglise_id])
+  @@unique([eglise_id, numero_membre], map: "uq_numero_membre")
+  @@index([eglise_id, nom, prenom], map: "idx_membres_nom")
+  @@index([eglise_id, statut], map: "idx_membres_statut")
+  @@index([eglise_id, telephone], map: "idx_membres_telephone")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model membres_familles {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id    String    @db.Uuid
+  membre_id    String    @db.Uuid
+  famille_id   String    @db.Uuid
+  lien_parente String    @db.VarChar(50)
+  est_referent Boolean   @default(false)
+  date_debut   DateTime  @default(dbgenerated("CURRENT_DATE")) @db.Date
+  date_fin     DateTime? @db.Date
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  familles     familles  @relation(fields: [famille_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_membre_famille_famille")
+  membres      membres   @relation(fields: [membre_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_membre_famille_membre")
+
+  @@index([famille_id], map: "idx_membres_familles_famille")
+  @@index([membre_id], map: "idx_membres_familles_membre")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model parametres_eglise {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id   String   @db.Uuid
+  cle         String   @db.VarChar(100)
+  valeur      Json
+  description String?
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+  eglises     eglises  @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([eglise_id, cle], map: "uq_parametre_eglise")
+  @@index([eglise_id], map: "idx_parametres_eglise")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model permissions {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code             String             @unique @db.VarChar(100)
+  nom              String             @db.VarChar(150)
+  module           String             @db.VarChar(80)
+  description      String?
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  role_permissions role_permissions[]
+
+  @@index([module], map: "idx_permissions_module")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model profils_utilisateurs {
+  id                                                                                                      String                                    @id @db.Uuid
+  eglise_id                                                                                               String                                    @db.Uuid
+  nom_affichage                                                                                           String?                                   @db.VarChar(150)
+  telephone                                                                                               String?                                   @db.VarChar(30)
+  photo_url                                                                                               String?
+  statut                                                                                                  String                                    @default("actif") @db.VarChar(20)
+  preferences                                                                                             Json                                      @default("{}")
+  created_at                                                                                              DateTime                                  @default(now()) @db.Timestamptz(6)
+  updated_at                                                                                              DateTime                                  @default(now()) @db.Timestamptz(6)
+  affectations                                                                                            affectations[]
+  ecole_dimanche_activites_ecole_dimanche_activites_responsable_idToprofils_utilisateurs                  ecole_dimanche_activites[]                @relation("ecole_dimanche_activites_responsable_idToprofils_utilisateurs")
+  ecole_dimanche_activites_ecole_dimanche_activites_valide_parToprofils_utilisateurs                      ecole_dimanche_activites[]                @relation("ecole_dimanche_activites_valide_parToprofils_utilisateurs")
+  ecole_dimanche_bulletins_ecole_dimanche_bulletins_genere_parToprofils_utilisateurs                      ecole_dimanche_bulletins[]                @relation("ecole_dimanche_bulletins_genere_parToprofils_utilisateurs")
+  ecole_dimanche_bulletins_ecole_dimanche_bulletins_valide_parToprofils_utilisateurs                      ecole_dimanche_bulletins[]                @relation("ecole_dimanche_bulletins_valide_parToprofils_utilisateurs")
+  ecole_dimanche_evaluations                                                                              ecole_dimanche_evaluations[]
+  ecole_dimanche_historique_presences                                                                     ecole_dimanche_historique_presences[]
+  ecole_dimanche_historique_recuperations                                                                 ecole_dimanche_historique_recuperations[]
+  ecole_dimanche_incidents_ecole_dimanche_incidents_cloture_parToprofils_utilisateurs                     ecole_dimanche_incidents[]                @relation("ecole_dimanche_incidents_cloture_parToprofils_utilisateurs")
+  ecole_dimanche_incidents_ecole_dimanche_incidents_signale_parToprofils_utilisateurs                     ecole_dimanche_incidents[]                @relation("ecole_dimanche_incidents_signale_parToprofils_utilisateurs")
+  ecole_dimanche_lecons_ecole_dimanche_lecons_cree_parToprofils_utilisateurs                              ecole_dimanche_lecons[]                   @relation("ecole_dimanche_lecons_cree_parToprofils_utilisateurs")
+  ecole_dimanche_lecons_ecole_dimanche_lecons_valide_parToprofils_utilisateurs                            ecole_dimanche_lecons[]                   @relation("ecole_dimanche_lecons_valide_parToprofils_utilisateurs")
+  ecole_dimanche_messages_ecole_dimanche_messages_destinataire_idToprofils_utilisateurs                   ecole_dimanche_messages[]                 @relation("ecole_dimanche_messages_destinataire_idToprofils_utilisateurs")
+  ecole_dimanche_messages_ecole_dimanche_messages_expediteur_idToprofils_utilisateurs                     ecole_dimanche_messages[]                 @relation("ecole_dimanche_messages_expediteur_idToprofils_utilisateurs")
+  ecole_dimanche_notifications                                                                            ecole_dimanche_notifications[]
+  ecole_dimanche_observations                                                                             ecole_dimanche_observations[]
+  ecole_dimanche_participations                                                                           ecole_dimanche_participations[]
+  ecole_dimanche_presences_ecole_dimanche_presences_enregistre_parToprofils_utilisateurs                  ecole_dimanche_presences[]                @relation("ecole_dimanche_presences_enregistre_parToprofils_utilisateurs")
+  ecole_dimanche_presences_ecole_dimanche_presences_justification_validee_parToprofils_utilisateurs       ecole_dimanche_presences[]                @relation("ecole_dimanche_presences_justification_validee_parToprofils_utilisateurs")
+  ecole_dimanche_programmes_ecole_dimanche_programmes_cree_parToprofils_utilisateurs                      ecole_dimanche_programmes[]               @relation("ecole_dimanche_programmes_cree_parToprofils_utilisateurs")
+  ecole_dimanche_programmes_ecole_dimanche_programmes_valide_parToprofils_utilisateurs                    ecole_dimanche_programmes[]               @relation("ecole_dimanche_programmes_valide_parToprofils_utilisateurs")
+  ecole_dimanche_propositions_niveau_ecole_dimanche_propositions_niveau_decide_parToprofils_utilisateurs  ecole_dimanche_propositions_niveau[]      @relation("ecole_dimanche_propositions_niveau_decide_parToprofils_utilisateurs")
+  ecole_dimanche_propositions_niveau_ecole_dimanche_propositions_niveau_propose_parToprofils_utilisateurs ecole_dimanche_propositions_niveau[]      @relation("ecole_dimanche_propositions_niveau_propose_parToprofils_utilisateurs")
+  ecole_dimanche_resultats_evaluations                                                                    ecole_dimanche_resultats_evaluations[]
+  ecole_dimanche_versions_lecons                                                                          ecole_dimanche_versions_lecons[]
+  membres                                                                                                 membres?
+  eglises                                                                                                 eglises                                   @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                                                                                                   users                                     @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  propositions_affectations_propositions_affectations_propose_par_eglise_idToprofils_utilisateurs         propositions_affectations[]               @relation("propositions_affectations_propose_par_eglise_idToprofils_utilisateurs")
+  propositions_affectations_propositions_affectations_decide_par_eglise_idToprofils_utilisateurs          propositions_affectations[]               @relation("propositions_affectations_decide_par_eglise_idToprofils_utilisateurs")
+  utilisateur_roles_utilisateur_roles_attribue_par_eglise_idToprofils_utilisateurs                        utilisateur_roles[]                       @relation("utilisateur_roles_attribue_par_eglise_idToprofils_utilisateurs")
+  utilisateur_roles_utilisateur_roles_profil_utilisateur_id_eglise_idToprofils_utilisateurs               utilisateur_roles[]                       @relation("utilisateur_roles_profil_utilisateur_id_eglise_idToprofils_utilisateurs")
+
+  @@unique([id, eglise_id], map: "uq_profil_id_eglise")
+  @@index([eglise_id], map: "idx_profils_eglise")
+  @@index([statut], map: "idx_profils_statut")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model propositions_affectations {
+  id                                                                                         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                                  String                @db.Uuid
+  membre_id                                                                                  String                @db.Uuid
+  departement_id                                                                             String                @db.Uuid
+  commission_id                                                                              String?               @db.Uuid
+  fonction_proposee                                                                          String                @db.VarChar(100)
+  propose_par                                                                                String                @db.Uuid
+  decide_par                                                                                 String?               @db.Uuid
+  statut                                                                                     String                @default("en_attente") @db.VarChar(20)
+  commentaire                                                                                String?
+  motif_decision                                                                             String?
+  date_proposition                                                                           DateTime              @default(now()) @db.Timestamptz(6)
+  date_decision                                                                              DateTime?             @db.Timestamptz(6)
+  affectation_id                                                                             String?               @db.Uuid
+  created_at                                                                                 DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                                                                                 DateTime              @default(now()) @db.Timestamptz(6)
+  affectations                                                                               affectations?         @relation(fields: [affectation_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_propositions_affectation")
+  profils_utilisateurs_propositions_affectations_propose_par_eglise_idToprofils_utilisateurs profils_utilisateurs  @relation("propositions_affectations_propose_par_eglise_idToprofils_utilisateurs", fields: [propose_par, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_propositions_auteur")
+  commissions                                                                                commissions?          @relation(fields: [commission_id, departement_id], references: [id, departement_id], onUpdate: NoAction, map: "fk_propositions_commission")
+  profils_utilisateurs_propositions_affectations_decide_par_eglise_idToprofils_utilisateurs  profils_utilisateurs? @relation("propositions_affectations_decide_par_eglise_idToprofils_utilisateurs", fields: [decide_par, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_propositions_decideur")
+  departements                                                                               departements          @relation(fields: [departement_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_propositions_departement")
+  membres                                                                                    membres               @relation(fields: [membre_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_propositions_membre")
+
+  @@unique([id, eglise_id], map: "uq_propositions_id_eglise")
+  @@index([propose_par], map: "idx_propositions_auteur")
+  @@index([date_proposition], map: "idx_propositions_date")
+  @@index([departement_id], map: "idx_propositions_departement")
+  @@index([eglise_id], map: "idx_propositions_eglise")
+  @@index([membre_id], map: "idx_propositions_membre")
+  @@index([statut], map: "idx_propositions_statut")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model role_permissions {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id     String      @db.Uuid
+  role_id       String      @db.Uuid
+  permission_id String      @db.Uuid
+  created_at    DateTime    @default(now()) @db.Timestamptz(6)
+  permissions   permissions @relation(fields: [permission_id], references: [id], onUpdate: NoAction, map: "fk_role_permissions_permission")
+  roles         roles       @relation(fields: [role_id, eglise_id], references: [id, eglise_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_role_permissions_role")
+
+  @@unique([role_id, permission_id], map: "uq_role_permission")
+  @@index([permission_id], map: "idx_role_permissions_permission")
+  @@index([role_id], map: "idx_role_permissions_role")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model roles {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id         String              @db.Uuid
+  code              String              @db.VarChar(50)
+  nom               String              @db.VarChar(100)
+  description       String?
+  niveau_portee     String              @db.VarChar(20)
+  actif             Boolean             @default(true)
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  role_permissions  role_permissions[]
+  eglises           eglises             @relation(fields: [eglise_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  utilisateur_roles utilisateur_roles[]
+
+  @@unique([eglise_id, code], map: "uq_roles_code")
+  @@unique([id, eglise_id], map: "uq_roles_id_eglise")
+  @@index([actif], map: "idx_roles_actif")
+  @@index([eglise_id], map: "idx_roles_eglise")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model utilisateur_roles {
+  id                                                                                           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id                                                                                    String                @db.Uuid
+  profil_utilisateur_id                                                                        String                @db.Uuid
+  role_id                                                                                      String                @db.Uuid
+  departement_id                                                                               String?               @db.Uuid
+  commission_id                                                                                String?               @db.Uuid
+  attribue_par                                                                                 String?               @db.Uuid
+  date_debut                                                                                   DateTime              @default(dbgenerated("CURRENT_DATE")) @db.Date
+  date_fin                                                                                     DateTime?             @db.Date
+  statut                                                                                       String                @default("active") @db.VarChar(20)
+  created_at                                                                                   DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                                                                                   DateTime              @default(now()) @db.Timestamptz(6)
+  profils_utilisateurs_utilisateur_roles_attribue_par_eglise_idToprofils_utilisateurs          profils_utilisateurs? @relation("utilisateur_roles_attribue_par_eglise_idToprofils_utilisateurs", fields: [attribue_par, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_utilisateur_roles_attribue_par")
+  commissions                                                                                  commissions?          @relation(fields: [commission_id, departement_id], references: [id, departement_id], onDelete: Restrict, onUpdate: NoAction, map: "fk_utilisateur_roles_commission")
+  departements                                                                                 departements?         @relation(fields: [departement_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_utilisateur_roles_departement")
+  profils_utilisateurs_utilisateur_roles_profil_utilisateur_id_eglise_idToprofils_utilisateurs profils_utilisateurs  @relation("utilisateur_roles_profil_utilisateur_id_eglise_idToprofils_utilisateurs", fields: [profil_utilisateur_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_utilisateur_roles_profil")
+  roles                                                                                        roles                 @relation(fields: [role_id, eglise_id], references: [id, eglise_id], onUpdate: NoAction, map: "fk_utilisateur_roles_role")
+
+  @@index([commission_id], map: "idx_utilisateur_roles_commission")
+  @@index([departement_id], map: "idx_utilisateur_roles_departement")
+  @@index([profil_utilisateur_id], map: "idx_utilisateur_roles_profil")
+  @@index([role_id], map: "idx_utilisateur_roles_role")
+  @@index([statut], map: "idx_utilisateur_roles_statut")
+  @@schema("public")
+}
+
+model uce_app_records {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eglise_id   String   @db.Uuid
+  entity_type String   @db.VarChar(40)
+  payload     Json     @default("{}")
+  created_by  String?  @db.Uuid
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+  eglises     eglises  @relation(fields: [eglise_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([eglise_id, entity_type, created_at(sort: Desc)], map: "uce_app_records_church_entity_created_idx")
+  @@index([eglise_id, created_by], map: "uce_app_records_church_creator_idx")
+  @@schema("public")
+}
+
+enum aal_level {
+  aal1
+  aal2
+  aal3
+
+  @@schema("auth")
+}
+
+enum code_challenge_method {
+  s256
+  plain
+
+  @@schema("auth")
+}
+
+enum factor_status {
+  unverified
+  verified
+
+  @@schema("auth")
+}
+
+enum factor_type {
+  totp
+  webauthn
+  phone
+  recovery_code
+
+  @@schema("auth")
+}
+
+enum oauth_authorization_status {
+  pending
+  approved
+  denied
+  expired
+
+  @@schema("auth")
+}
+
+enum oauth_client_type {
+  public
+  confidential
+
+  @@schema("auth")
+}
+
+enum oauth_registration_type {
+  dynamic
+  manual
+
+  @@schema("auth")
+}
+
+enum oauth_response_type {
+  code
+
+  @@schema("auth")
+}
+
+enum one_time_token_type {
+  confirmation_token
+  reauthentication_token
+  recovery_token
+  email_change_token_new
+  email_change_token_current
+  phone_change_token
+
+  @@schema("auth")
+}
