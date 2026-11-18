@@ -39,6 +39,7 @@ const Login = lazy(() => import('./pages/Login'));
 const MemberManagement = lazy(() => import('./pages/MemberManagement'));
 const OrganizationWorkspace = lazy(() => import('./pages/OrganizationWorkspace'));
 const RoleAssignments = lazy(() => import('./pages/RoleAssignments'));
+const RoleRequests = lazy(() => import('./pages/RoleRequests'));
 const DepartmentChat = lazy(() => import('./pages/DepartmentChat'));
 const OrganizationManagement = lazy(() => import('./pages/OrganizationManagement'));
 const ContentManagement = lazy(() => import('./pages/ContentManagement'));
@@ -105,6 +106,7 @@ const AuthenticatedApp = () => {
           <Route path="/admin/groups" element={<OrganizationManagement />} />
           <Route path="/admin/content" element={<ContentManagement />} />
           <Route path="/admin/organisation" element={<RoleAssignments />} />
+          <Route path="/admin/role-requests" element={<RoleRequests />} />
           <Route path="/admin/departements/:departmentId" element={<OrganizationWorkspace />} />
           <Route path="/admin/commissions/:commissionId" element={<OrganizationWorkspace />} />
           <Route path="/journal" element={<Journal />} />

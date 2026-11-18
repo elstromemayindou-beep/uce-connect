@@ -18,7 +18,7 @@ const blankSermon = {
   date: '', scripture: '', series_name: '', duration_minutes: '',
   thumbnail_url: '', video_url: '', audio_url: '', stream_url: '', pdf_url: '', docx_url: '',
 };
-const blankThought = { title: '', content: '', author: '' };
+const blankThought = { title: '', content: '', author: '', image_url: '' };
 
 function dateInput(value) {
   return value ? String(value).slice(0, 10) : '';
@@ -35,6 +35,7 @@ export default function ContentManagement() {
   const [thoughtDraft, setThoughtDraft] = useState(blankThought);
   const [editingId, setEditingId] = useState('');
   const [eventImageUploading, setEventImageUploading] = useState(false);
+  const [thoughtImageUploading, setThoughtImageUploading] = useState(false);
   const [sermonFileUploads, setSermonFileUploads] = useState(0);
   useEffect(() => {
     if (['events', 'sermons', 'thoughts'].includes(requestedTab)) setActiveTab(requestedTab);
@@ -84,6 +85,7 @@ export default function ContentManagement() {
     setSermonDraft(blankSermon);
     setThoughtDraft(blankThought);
     setEventImageUploading(false);
+    setThoughtImageUploading(false);
     setSermonFileUploads(0);
   };
   const invalidate = async () => Promise.all([
@@ -150,7 +152,7 @@ export default function ContentManagement() {
         docx_url: item.docx_url || '',
       });
     } else {
-      setThoughtDraft({ title: item.title || '', content: item.content || '', author: item.author || '' });
+      setThoughtDraft({ title: item.title || '', content: item.content || '', author: item.author || '', image_url: item.image_url || '' });
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -277,14 +279,15 @@ export default function ContentManagement() {
             saveMutation.reset();
             saveMutation.mutate();
           }}>
-            <div className="space-y-2"><Label htmlFor="thought-title">Titre</Label><Input id="thought-title" required maxLength={160} value={thoughtDraft.title} onChange={(event) => setThoughtDraft({ ...thoughtDraft, title: event.target.value })} placeholder="Une parole pour aujourd’hui" /></div>
-            <div className="space-y-2"><Label htmlFor="thought-content">Pensée</Label><Textarea id="thought-content" required maxLength={3000} rows={5} value={thoughtDraft.content} onChange={(event) => setThoughtDraft({ ...thoughtDraft, content: event.target.value })} placeholder="Écrivez la méditation du jour…" /></div>
+            <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4"><p className="mb-3 text-sm font-semibold">L’image est le contenu principal de la pensée. Le titre et le texte ci-dessous peuvent servir de légende.</p><ImageUploadField id="thought-image" label="Image de la pensée du jour" value={thoughtDraft.image_url} required onChange={(image_url) => setThoughtDraft({ ...thoughtDraft, image_url })} onUploadingChange={setThoughtImageUploading} previewClassName="max-h-[28rem] w-full bg-slate-950 object-contain" /></div>
+            <div className="space-y-2"><Label htmlFor="thought-title">Titre ou référence (facultatif)</Label><Input id="thought-title" maxLength={160} value={thoughtDraft.title} onChange={(event) => setThoughtDraft({ ...thoughtDraft, title: event.target.value })} placeholder="Ex. Une parole pour aujourd’hui" /></div>
+            <div className="space-y-2"><Label htmlFor="thought-content">Légende (facultatif)</Label><Textarea id="thought-content" maxLength={3000} rows={4} value={thoughtDraft.content} onChange={(event) => setThoughtDraft({ ...thoughtDraft, content: event.target.value })} placeholder="Ajoutez un court commentaire si nécessaire…" /></div>
             <div className="space-y-2"><Label htmlFor="thought-author">Auteur (facultatif)</Label><Input id="thought-author" maxLength={160} value={thoughtDraft.author} onChange={(event) => setThoughtDraft({ ...thoughtDraft, author: event.target.value })} /></div>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted/50 p-4">
               <p className="text-sm text-muted-foreground">La pensée s’affiche pendant 24 heures, puis rejoint les archives.</p>
               <div className="flex gap-2">
                 {editingId && <Button type="button" variant="outline" onClick={resetForm}>Annuler</Button>}
-                <Button type="submit" disabled={saveMutation.isPending}><Plus className="mr-2 h-4 w-4" />{saveMutation.isPending ? 'Publication…' : editingId ? 'Enregistrer' : 'Publier pour 24 h'}</Button>
+                <Button type="submit" disabled={saveMutation.isPending || thoughtImageUploading || !thoughtDraft.image_url}><Plus className="mr-2 h-4 w-4" />{thoughtImageUploading ? 'Téléversement…' : saveMutation.isPending ? 'Publication…' : editingId ? 'Enregistrer' : 'Publier pour 24 h'}</Button>
               </div>
             </div>
           </form>
@@ -298,7 +301,7 @@ export default function ContentManagement() {
         {currentLoading ? <p className="py-8 text-center text-muted-foreground">Chargement…</p> : currentError ? <p role="alert" className="py-8 text-center text-destructive">{currentError.message || 'Impossible de charger les contenus.'}</p> : currentItems.length === 0 ? <p className="py-8 text-center text-muted-foreground">Aucun contenu publié.</p> : (
           <div className="divide-y divide-border/60">{currentItems.map((item) => <article key={item.id} className="flex flex-wrap items-center gap-3 py-4">
             {(item.image_url || item.thumbnail_url) && <img src={item.image_url || item.thumbnail_url} alt="" className="h-14 w-20 rounded-xl object-cover" />}
-            <div className="min-w-0 flex-1"><p className="font-bold">{item.title}</p><p className="text-xs text-muted-foreground">{activeTab === 'events' ? `${item.type || 'Événement'} · ${item.date || 'Date à définir'}` : activeTab === 'sermons' ? `${item.category || 'sermon'} · ${item.type || 'contenu'}${item.speaker ? ` · ${item.speaker}` : ''}` : `${item.author || 'Église UCE'} · ${item.created_date ? new Date(item.created_date).toLocaleString('fr-FR') : ''}`}</p></div>
+            <div className="min-w-0 flex-1"><p className="font-bold">{item.title || (activeTab === 'thoughts' ? 'Pensée illustrée' : '')}</p><p className="text-xs text-muted-foreground">{activeTab === 'events' ? `${item.type || 'Événement'} · ${item.date || 'Date à définir'}` : activeTab === 'sermons' ? `${item.category || 'sermon'} · ${item.type || 'contenu'}${item.speaker ? ` · ${item.speaker}` : ''}` : `${item.author || 'Église UCE'} · ${item.created_date ? new Date(item.created_date).toLocaleString('fr-FR') : ''}`}</p></div>
             {activeTab === 'thoughts' && <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${item.id === activeThoughtId ? 'bg-emerald-500/10 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>{item.id === activeThoughtId ? 'Active · 24 h' : 'Archivée'}</span>}
             <Button size="sm" variant="outline" onClick={() => edit(item)}><Pencil className="mr-1 h-4 w-4" />Modifier</Button>
             <Button size="sm" variant="outline" className="text-destructive" onClick={() => { if (window.confirm(`Supprimer « ${item.title} » ?`)) deleteMutation.mutate({ kind: activeTab === 'events' ? 'Event' : activeTab === 'sermons' ? 'Sermon' : 'DailyThought', id: item.id }); }}><Trash2 className="mr-1 h-4 w-4" />Supprimer</Button>

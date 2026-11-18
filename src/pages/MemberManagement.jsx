@@ -28,13 +28,15 @@ export default function MemberManagement() {
     queryKey: ['me'],
     queryFn: () => appClient.auth.me(),
   });
+  const isPastor = Boolean(user?.roles?.includes('PASTEUR_PRINCIPAL'));
   const canManageMembers = Boolean(user?.roles?.some((role) => [
-    'SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL', 'GESTIONNAIRE_MEMBRES',
+    'SUPER_ADMIN', 'ADMIN_GENERAL', 'GESTIONNAIRE_MEMBRES',
   ].includes(role)));
+  const canViewMembers = canManageMembers || isPastor;
   const { data: members = [], isLoading, isError } = useQuery({
     queryKey: ['managed-members'],
     queryFn: () => appClient.members.list(),
-    enabled: canManageMembers,
+    enabled: canViewMembers,
   });
   const {
     data: availableUsers = [],
@@ -102,7 +104,7 @@ export default function MemberManagement() {
   };
 
   if (isLoadingUser) return <p className="p-8 text-center text-muted-foreground">Chargement de votre espace…</p>;
-  if (!canManageMembers) {
+  if (!canViewMembers) {
     return <div className="mx-auto max-w-lg p-8 text-center"><h1 className="text-xl font-black">Accès restreint</h1><p className="mt-2 text-muted-foreground">La gestion des membres n’est pas associée à votre compte.</p></div>;
   }
 
@@ -116,6 +118,7 @@ export default function MemberManagement() {
         <p className="mt-2 text-muted-foreground">Ajouter, modifier et archiver les fiches. Les dossiers archivés gardent leur historique financier.</p>
       </header>
 
+      {canManageMembers && <>
       <section className="glass-panel space-y-4 rounded-3xl p-4 md:p-6">
         <h2 className="flex items-center gap-2 text-xl font-black"><UserPlus className="h-5 w-5 text-primary" />{editingId ? 'Modifier une fiche' : 'Ajouter un membre'}</h2>
         {!editingId && <p className="text-sm text-muted-foreground">Cela crée la fiche de membre, pas son compte de connexion. Le compte téléphone/e-mail devra ensuite être créé et rattaché séparément pour lui donner accès à l’application.</p>}
@@ -179,6 +182,7 @@ export default function MemberManagement() {
           </div>
         )}
       </section>
+      </>}
 
       <section className="glass-panel rounded-3xl p-4 md:p-6">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -195,8 +199,8 @@ export default function MemberManagement() {
                 <article key={member.member_id} className="flex flex-wrap items-center gap-3 py-4">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-primary/10 font-black text-primary">{member.photo_url ? <img src={member.photo_url} alt="" className="h-full w-full object-cover" /> : member.nom?.trim().charAt(0)?.toLocaleUpperCase() || '?'}</div>
                   <div className="min-w-0 flex-1"><p className="truncate font-bold">{[member.prenom, member.nom, member.postnom].filter(Boolean).join(' ') || member.nom_affichage || 'Sans nom'}</p><p className="truncate text-sm text-muted-foreground">{member.email || 'E-mail non renseigné'}{member.telephone ? ` · ${member.telephone}` : ''}</p><p className="text-xs text-muted-foreground">{member.numero_membre} · {member.is_active ? 'Actif' : 'Archivé'}{member.profile_id ? ' · compte connecté' : ' · sans compte connecté'}</p></div>
-                  <Button size="sm" variant="outline" onClick={() => editMember(member)}><Pencil className="mr-1 h-4 w-4" />Modifier</Button>
-                  <Button size="sm" variant="outline" onClick={() => statusMutation.mutate({ id: member.member_id, active: !member.is_active })}>{member.is_active ? <Archive className="mr-1 h-4 w-4" /> : <RotateCcw className="mr-1 h-4 w-4" />}{member.is_active ? 'Archiver' : 'Réactiver'}</Button>
+                  {canManageMembers && <><Button size="sm" variant="outline" onClick={() => editMember(member)}><Pencil className="mr-1 h-4 w-4" />Modifier</Button>
+                  <Button size="sm" variant="outline" onClick={() => statusMutation.mutate({ id: member.member_id, active: !member.is_active })}>{member.is_active ? <Archive className="mr-1 h-4 w-4" /> : <RotateCcw className="mr-1 h-4 w-4" />}{member.is_active ? 'Archiver' : 'Réactiver'}</Button></>}
                 </article>
               ))}</div>}
       </section>

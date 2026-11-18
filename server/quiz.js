@@ -18,7 +18,7 @@ function quizError(status, message) {
 }
 
 function canManageQuiz(identity) {
-  return identity.roles.some((role) => ['SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL'].includes(role));
+  return identity.roles.some((role) => ['SUPER_ADMIN', 'ADMIN_GENERAL'].includes(role));
 }
 
 function normalizeAnswer(value) {

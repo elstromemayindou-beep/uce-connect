@@ -87,9 +87,10 @@ app.get('/api/db-health', async (_request, response) => {
   }
 });
 
-const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL']);
+const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN_GENERAL']);
 const STAFF_ROLES = new Set([
   ...ADMIN_ROLES,
+  'PASTEUR_PRINCIPAL',
   'RESP_DEPARTEMENT',
   'SECRETAIRE_DEPARTEMENT',
   'RESP_COMMISSION',
@@ -98,13 +99,13 @@ const STAFF_ROLES = new Set([
 const FINANCE_ROLES = new Set(['TRESORIER', 'CONTROLEUR_FIN']);
 const CAMPAIGN_MANAGEMENT_ROLES = new Set([...ADMIN_ROLES, ...FINANCE_ROLES]);
 const MEMBER_MANAGEMENT_ROLES = new Set([...STAFF_ROLES, 'GESTIONNAIRE_MEMBRES']);
-const EVENT_MANAGEMENT_ROLES = new Set([...STAFF_ROLES, 'SECRETAIRE_GENERAL']);
+const EVENT_MANAGEMENT_ROLES = new Set([...STAFF_ROLES].filter((role) => role !== 'PASTEUR_PRINCIPAL').concat('SECRETAIRE_GENERAL'));
 const ORGANIZATION_ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL']);
 const ENTITY_FIELDS = {
   Campaign: new Set(['title', 'description', 'goal_amount', 'raised_amount', 'currency', 'image_url', 'is_active', 'end_date']),
-  Community: new Set(['name', 'description', 'city', 'country', 'logo_url', 'pastor_name', 'leader_name', 'member_count', 'contact_email', 'contact_phone', 'is_international']),
+  Community: new Set(['name', 'description', 'address', 'city', 'country', 'logo_url', 'pastor_name', 'leader_name', 'member_count', 'contact_email', 'contact_phone', 'is_international']),
   DailyVerse: new Set(['text', 'reference', 'date']),
-  DailyThought: new Set(['title', 'content', 'author']),
+  DailyThought: new Set(['title', 'content', 'author', 'image_url']),
   Donation: new Set(['amount', 'type', 'payment_method', 'payment_reference', 'donor_name', 'donor_email', 'donor_member_id', 'donor_anonymous', 'currency', 'status', 'campaign_id']),
   Event: new Set(['title', 'description', 'type', 'date', 'time', 'location', 'image_url', 'department', 'status', 'capacity']),
   GalleryCategory: new Set(['name', 'description', 'color']),
@@ -137,9 +138,11 @@ function isPastor(identity) {
 }
 
 function canManageMembers(identity) {
-  return isPastor(identity) || identity.roles.some((role) => (
-    [...ORGANIZATION_ADMIN_ROLES, 'GESTIONNAIRE_MEMBRES'].includes(role)
-  ));
+  return isSystemAdministrator(identity) || identity.roles.includes('GESTIONNAIRE_MEMBRES');
+}
+
+function canViewMembers(identity) {
+  return isPastor(identity) || canManageMembers(identity);
 }
 
 function canManageOrganizationStructure(identity) {
@@ -159,11 +162,11 @@ function isCommunication(identity) {
 }
 
 function canManageNotifications(identity) {
-  return isSystemAdministrator(identity) || isCommunication(identity);
+  return isSystemAdministrator(identity) || (!isPastor(identity) && isCommunication(identity));
 }
 
 function canManagePhotoGallery(identity) {
-  return isChurchWideStaff(identity) || isCommunication(identity);
+  return isSystemAdministrator(identity) || (!isPastor(identity) && (identity.roles.includes('SECRETAIRE_GENERAL') || isCommunication(identity)));
 }
 
 function getBibleId(language) {
@@ -338,7 +341,7 @@ async function dispatchStudyReminders() {
 }
 
 function isChurchWideStaff(identity) {
-  return identity.roles.some((role) => ORGANIZATION_ADMIN_ROLES.has(role) || role === 'SECRETAIRE_GENERAL');
+  return isSystemAdministrator(identity) || (!isPastor(identity) && identity.roles.includes('SECRETAIRE_GENERAL'));
 }
 
 function isUuid(value) {
@@ -381,6 +384,7 @@ function normalizeScopeName(value) {
 }
 
 function canManageEventScope(identity, event) {
+  if (isPastor(identity) && !isSystemAdministrator(identity)) return false;
   if (isChurchWideStaff(identity)) return true;
   const department = normalizeScopeName(event?.department);
   if (!department) return false;
@@ -425,16 +429,20 @@ function sanitizePayload(entity, input) {
   return payload;
 }
 
-function validateDailyThought(payload) {
+function validateDailyThought(payload, { requireImage = false } = {}) {
   const title = typeof payload?.title === 'string' ? payload.title.trim() : '';
   const content = typeof payload?.content === 'string' ? payload.content.trim() : '';
   const author = typeof payload?.author === 'string' ? payload.author.trim() : '';
-  if (title.length < 2 || title.length > 160 || content.length < 2 || content.length > 3000 || author.length > 160) {
-    const error = new Error('Le titre, le texte ou le nom de la pensée du jour est invalide.');
+  const imageUrl = typeof payload?.image_url === 'string' ? payload.image_url.trim() : '';
+  if ((!title && !content && !imageUrl) || title.length > 160 || content.length > 3000 || author.length > 160
+    || (requireImage && !imageUrl) || (imageUrl && !isSafeWebUrl(imageUrl, { allowRelative: true }))) {
+    const error = new Error(requireImage && !imageUrl
+      ? 'Ajoutez une image pour publier la pensée du jour.'
+      : 'Le contenu ou l’image de la pensée du jour est invalide.');
     error.status = 400;
     throw error;
   }
-  return { title, content, author };
+  return { title, content, author, image_url: imageUrl || null };
 }
 
 function validateMediaPayload(entity, payload, { partial = false } = {}) {
@@ -1056,6 +1064,37 @@ app.post('/api/auth/register', async (request, response, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.post('/api/auth/login-phone', async (request, response, next) => {
+  try {
+    const phone = typeof request.body?.phone === 'string' ? request.body.phone.trim() : '';
+    const password = typeof request.body?.password === 'string' ? request.body.password : '';
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 8 || digits.length > 15 || password.length < 1 || password.length > 72) {
+      response.status(400).json({ error: 'Identifiant ou mot de passe incorrect.' }); return;
+    }
+    const churches = await prisma.$queryRaw`SELECT id FROM public.eglises WHERE upper(sigle)='UCE' AND actif=true LIMIT 1`;
+    const matches = churches[0] ? await prisma.$queryRaw`
+      SELECT DISTINCT au.email
+      FROM public.profils_utilisateurs p
+      JOIN auth.users au ON au.id=p.id
+      LEFT JOIN public.membres m ON m.profil_utilisateur_id=p.id AND m.eglise_id=p.eglise_id
+      WHERE p.eglise_id=${churches[0].id}::uuid AND p.statut='actif'
+        AND (RIGHT(REGEXP_REPLACE(COALESCE(p.telephone,''),'[^0-9]','','g'),9)=RIGHT(${digits},9)
+          OR RIGHT(REGEXP_REPLACE(COALESCE(m.telephone,''),'[^0-9]','','g'),9)=RIGHT(${digits},9))
+      LIMIT 2
+    ` : [];
+    if (matches?.length !== 1 || !matches[0].email) {
+      response.status(401).json({ error: 'Identifiant ou mot de passe incorrect.' }); return;
+    }
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: matches[0].email, password });
+    if (error || !data.session) { response.status(401).json({ error: 'Identifiant ou mot de passe incorrect.' }); return; }
+    response.json({ access_token: data.session.access_token, refresh_token: data.session.refresh_token, expires_in: data.session.expires_in, token_type: data.session.token_type });
+  } catch (error) { next(error); }
 });
 
 app.use('/api', async (request, response, next) => {
@@ -3393,7 +3432,7 @@ app.post('/api/department-chats/:departmentId/meetings', async (request, respons
 
 app.get('/api/admin/members', async (request, response, next) => {
   try {
-    if (!canManageMembers(request.identity)) {
+    if (!canViewMembers(request.identity)) {
       response.status(403).json({ error: 'Vous n’avez pas les droits pour consulter les membres.' });
       return;
     }
@@ -3950,7 +3989,7 @@ app.get('/api/organization', async (request, response, next) => {
 
 app.get('/api/organization/admin', async (request, response, next) => {
   try {
-    if (!request.identity.roles.some((role) => ORGANIZATION_ADMIN_ROLES.has(role))) {
+    if (!isSystemAdministrator(request.identity)) {
       response.status(403).json({ error: 'La gestion des rôles est réservée à l’administration de l’église.' });
       return;
     }
@@ -4021,7 +4060,7 @@ app.post('/api/organization/accounts', async (request, response, next) => {
   let createdAuthUserId = null;
   const adminClient = getSupabaseAdminClient();
   try {
-    if (!request.identity.roles.some((role) => ORGANIZATION_ADMIN_ROLES.has(role))) {
+    if (!isSystemAdministrator(request.identity)) {
       response.status(403).json({ error: 'Seule l’administration de l’église peut créer un compte responsable.' });
       return;
     }
@@ -4150,7 +4189,7 @@ app.post('/api/organization/accounts', async (request, response, next) => {
 
 app.patch('/api/organization/accounts/:profileId/password', async (request, response, next) => {
   try {
-    if (!request.identity.roles.some((role) => ORGANIZATION_ADMIN_ROLES.has(role))) {
+    if (!isSystemAdministrator(request.identity)) {
       response.status(403).json({ error: 'Seule l’administration de l’église peut réinitialiser un mot de passe.' });
       return;
     }
@@ -4206,7 +4245,7 @@ app.patch('/api/organization/accounts/:profileId/password', async (request, resp
 
 app.post('/api/organization/assignments', async (request, response, next) => {
   try {
-    if (!request.identity.roles.some((role) => ORGANIZATION_ADMIN_ROLES.has(role))) {
+    if (!isSystemAdministrator(request.identity)) {
       response.status(403).json({ error: 'Seule l’administration de l’église peut attribuer des rôles.' });
       return;
     }
@@ -4318,7 +4357,7 @@ app.post('/api/organization/assignments', async (request, response, next) => {
 
 app.patch('/api/organization/assignments/:id', async (request, response, next) => {
   try {
-    if (!request.identity.roles.some((role) => ORGANIZATION_ADMIN_ROLES.has(role))) {
+    if (!isSystemAdministrator(request.identity)) {
       response.status(403).json({ error: 'Seule l’administration de l’église peut modifier les rôles.' });
       return;
     }
@@ -4383,6 +4422,115 @@ app.patch('/api/organization/assignments/:id', async (request, response, next) =
   } catch (error) {
     next(error);
   }
+});
+
+app.get('/api/organization/role-requests', async (request, response, next) => {
+  try {
+    if (!isPastor(request.identity) && !isSystemAdministrator(request.identity)) {
+      response.status(403).json({ error: 'Cet espace est réservé au pasteur et à l’administration générale.' });
+      return;
+    }
+    const rows = await prisma.$queryRaw`
+      SELECT q.id,q.profil_cible_id AS profile_id,q.role_id,q.departement_id AS department_id,
+        q.commission_id,q.motif AS reason,q.statut AS status,q.created_at,q.decision_motif AS decision_reason,
+        p.nom_affichage AS target_name,r.code AS role_code,r.nom AS role_name,
+        d.nom AS department_name,c.nom AS commission_name
+      FROM public.uce_role_assignment_requests q
+      JOIN public.profils_utilisateurs p ON p.id=q.profil_cible_id AND p.eglise_id=q.eglise_id
+      JOIN public.roles r ON r.id=q.role_id AND r.eglise_id=q.eglise_id
+      LEFT JOIN public.departements d ON d.id=q.departement_id AND d.eglise_id=q.eglise_id
+      LEFT JOIN public.commissions c ON c.id=q.commission_id AND c.departement_id=q.departement_id
+      WHERE q.eglise_id=${request.identity.profile.eglise_id}::uuid
+        AND (${isSystemAdministrator(request.identity)} OR q.demandeur_id=${request.identity.profile.id}::uuid)
+      ORDER BY q.created_at DESC LIMIT 200
+    `;
+    response.json(rows);
+  } catch (error) { next(error); }
+});
+
+app.get('/api/organization/role-request-options', async (request, response, next) => {
+  try {
+    if (!isPastor(request.identity)) { response.status(403).json({ error: 'Seul le pasteur principal peut proposer un responsable.' }); return; }
+    const egliseId = request.identity.profile.eglise_id;
+    const [roles, departments, commissions, members] = await Promise.all([
+      prisma.$queryRaw`SELECT id,code,nom,niveau_portee FROM public.roles WHERE eglise_id=${egliseId}::uuid AND actif=true AND code IN ('RESP_DEPARTEMENT','SECRETAIRE_DEPARTEMENT','RESP_COMMISSION','SECRETAIRE_COMMISSION') ORDER BY nom`,
+      prisma.$queryRaw`SELECT id,nom FROM public.departements WHERE eglise_id=${egliseId}::uuid AND actif=true ORDER BY nom`,
+      prisma.$queryRaw`SELECT id,nom,departement_id FROM public.commissions WHERE eglise_id=${egliseId}::uuid AND actif=true ORDER BY nom`,
+      prisma.$queryRaw`SELECT p.id AS profile_id,COALESCE(NULLIF(BTRIM(p.nom_affichage),''),m.prenom || ' ' || m.nom,'Membre') AS full_name FROM public.profils_utilisateurs p LEFT JOIN public.membres m ON m.profil_utilisateur_id=p.id AND m.eglise_id=p.eglise_id WHERE p.eglise_id=${egliseId}::uuid AND p.statut='actif' ORDER BY full_name LIMIT 1500`,
+    ]);
+    response.json({ roles, departments, commissions, members });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/organization/role-requests', async (request, response, next) => {
+  try {
+    if (!isPastor(request.identity)) { response.status(403).json({ error: 'Seul le pasteur principal peut proposer un responsable.' }); return; }
+    const { profile_id: targetId, role_id: roleId, department_id: departmentId, commission_id: commissionId } = request.body || {};
+    const reason = typeof request.body?.reason === 'string' ? request.body.reason.trim() : '';
+    if (![targetId, roleId].every(isUuid) || (departmentId && !isUuid(departmentId)) || (commissionId && !isUuid(commissionId)) || reason.length < 5 || reason.length > 1000) {
+      response.status(400).json({ error: 'Choisissez un membre, une responsabilité et indiquez le motif de la demande.' }); return;
+    }
+    const egliseId = request.identity.profile.eglise_id;
+    const role = await prisma.$queryRaw`SELECT id,code,niveau_portee FROM public.roles WHERE id=${roleId}::uuid AND eglise_id=${egliseId}::uuid AND actif=true AND code IN ('RESP_DEPARTEMENT','SECRETAIRE_DEPARTEMENT','RESP_COMMISSION','SECRETAIRE_COMMISSION')`;
+    if (!role[0]
+      || role[0].niveau_portee === 'eglise' && (departmentId || commissionId)
+      || role[0].niveau_portee === 'departement' && (!departmentId || commissionId)
+      || role[0].niveau_portee === 'commission' && (!departmentId || !commissionId)) {
+      response.status(400).json({ error: 'Le rôle ou son périmètre est invalide.' }); return;
+    }
+    const target = await prisma.$queryRaw`SELECT id FROM public.profils_utilisateurs WHERE id=${targetId}::uuid AND eglise_id=${egliseId}::uuid AND statut='actif'`;
+    if (!target[0] || ['SUPER_ADMIN','ADMIN_GENERAL','PASTEUR_PRINCIPAL'].includes(role[0].code)) { response.status(400).json({ error: 'Le membre ou le rôle sélectionné ne peut pas faire l’objet de cette demande.' }); return; }
+    const inserted = await prisma.$queryRaw`
+      INSERT INTO public.uce_role_assignment_requests (eglise_id,demandeur_id,profil_cible_id,role_id,departement_id,commission_id,motif)
+      VALUES (${egliseId}::uuid,${request.identity.profile.id}::uuid,${targetId}::uuid,${roleId}::uuid,${departmentId || null}::uuid,${commissionId || null}::uuid,${reason})
+      RETURNING id,statut AS status,created_at
+    `;
+    response.status(201).json(inserted[0]);
+  } catch (error) { next(error); }
+});
+
+app.patch('/api/organization/role-requests/:id', async (request, response, next) => {
+  try {
+    if (!isSystemAdministrator(request.identity)) { response.status(403).json({ error: 'Seule l’administration générale peut traiter ces demandes.' }); return; }
+    const id = request.params.id;
+    const action = request.body?.action;
+    const decisionReason = typeof request.body?.decision_reason === 'string' ? request.body.decision_reason.trim() : '';
+    if (!isUuid(id) || !['approve','reject'].includes(action) || (action === 'reject' && !decisionReason)) { response.status(400).json({ error: 'Décision ou motif invalide.' }); return; }
+    const result = await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw`SELECT * FROM public.uce_role_assignment_requests WHERE id=${id}::uuid AND eglise_id=${request.identity.profile.eglise_id}::uuid AND statut='pending' FOR UPDATE`;
+      const requestRow = rows[0];
+      if (!requestRow) { const error = new Error('Cette demande est introuvable ou déjà traitée.'); error.status = 404; throw error; }
+      if (action === 'approve') {
+        const duplicate = await tx.$queryRaw`
+          SELECT id FROM public.utilisateur_roles
+          WHERE eglise_id=${requestRow.eglise_id}::uuid
+            AND profil_utilisateur_id=${requestRow.profil_cible_id}::uuid
+            AND role_id=${requestRow.role_id}::uuid
+            AND departement_id IS NOT DISTINCT FROM ${requestRow.departement_id}::uuid
+            AND commission_id IS NOT DISTINCT FROM ${requestRow.commission_id}::uuid
+            AND statut='active' AND (date_fin IS NULL OR date_fin>=CURRENT_DATE)
+          LIMIT 1
+        `;
+        if (duplicate[0]) { const error = new Error('Ce membre possède déjà cette responsabilité dans ce périmètre.'); error.status = 409; throw error; }
+        await tx.utilisateur_roles.create({ data: {
+          eglise_id: requestRow.eglise_id, profil_utilisateur_id: requestRow.profil_cible_id,
+          role_id: requestRow.role_id, departement_id: requestRow.departement_id,
+          commission_id: requestRow.commission_id, attribue_par: request.identity.profile.id, statut: 'active',
+        } });
+      }
+      const updated = await tx.$queryRaw`UPDATE public.uce_role_assignment_requests SET statut=${action === 'approve' ? 'approved' : 'rejected'},traite_par=${request.identity.profile.id}::uuid,traite_le=now(),decision_motif=${decisionReason || null} WHERE id=${id}::uuid RETURNING id,statut AS status`;
+      await writeAuditEvent(tx, {
+        churchId: request.identity.profile.eglise_id,
+        actorId: request.identity.authUser.id,
+        action: action === 'approve' ? 'role_assignment_request_approved' : 'role_assignment_request_rejected',
+        entityType: 'role_assignment_request',
+        entityId: id,
+        details: { target_profile_id: requestRow.profil_cible_id, role_id: requestRow.role_id },
+      });
+      return updated[0];
+    });
+    response.json(result);
+  } catch (error) { next(error); }
 });
 
 app.post('/api/events/:id/registration', async (request, response, next) => {
@@ -4853,10 +5001,17 @@ app.get('/api/entities/:entity', async (request, response, next) => {
         orderBy: { created_at: 'desc' },
         take: 200,
       });
+      const brandingRows = await prisma.$queryRaw`
+        SELECT valeur FROM public.parametres_eglise
+        WHERE eglise_id=${church.id}::uuid AND cle='app_branding' LIMIT 1
+      `;
+      const pastorName = brandingRows[0]?.valeur?.pastor_name || '';
       response.json([
         {
           id: church.id,
           name: church.nom,
+        address: church.adresse,
+          pastor_name: pastorName,
           description: church.description,
           city: church.ville,
           country: church.pays,
@@ -4865,6 +5020,7 @@ app.get('/api/entities/:entity', async (request, response, next) => {
           logo_url: church.logo_url,
           member_count: church._count.membres,
           is_international: false,
+        is_primary: true,
         },
         ...records.map((record) => ({ ...record.payload, id: record.id })),
       ]);
@@ -5240,14 +5396,26 @@ app.post('/api/entities/:entity', async (request, response, next) => {
       : ['GalleryCategory', 'GalleryPhoto'].includes(entity)
         ? canManagePhotoGallery(request.identity)
       : ['DailyVerse', 'DailyThought', 'Sermon'].includes(entity)
-        ? hasRequiredRole && isChurchWideStaff(request.identity)
+        ? hasRequiredRole && (isChurchWideStaff(request.identity) || isPastor(request.identity) && ['Sermon', 'DailyThought'].includes(entity))
         : hasRequiredRole;
     if (!canCreate) {
       response.status(403).json({ error: 'Vous n’avez pas les droits pour créer ce contenu.' });
       return;
     }
     const payload = sanitizePayload(entity, request.body);
-    if (entity === 'DailyThought') Object.assign(payload, validateDailyThought(payload));
+    if (entity === 'DailyThought') Object.assign(payload, validateDailyThought(payload, { requireImage: true }));
+    if (entity === 'Community') {
+      for (const key of ['name','description','address','city','country','pastor_name','leader_name','contact_email','contact_phone']) {
+        if (typeof payload[key] === 'string') payload[key] = payload[key].trim();
+      }
+      if (typeof payload.name !== 'string' || !payload.name || payload.name.length > 200 || (payload.description?.length || 0) > 2000
+        || (payload.address?.length || 0) > 500 || (payload.pastor_name?.length || 0) > 150
+        || (payload.logo_url && !isSafeWebUrl(payload.logo_url, { allowRelative: true }))
+        || (payload.member_count !== undefined && (!Number.isInteger(Number(payload.member_count)) || Number(payload.member_count) < 0))
+        || (payload.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.contact_email))) {
+        response.status(400).json({ error: 'Le nom, l’adresse, le pasteur ou l’image de la communauté est invalide.' }); return;
+      }
+    }
     if (entity === 'GalleryPhoto') validateGalleryPhotoPayload(payload);
     if (entity === 'GalleryCategory') validateGalleryCategoryPayload(payload);
     if (entity === 'GalleryPhoto') {
@@ -5441,8 +5609,8 @@ app.patch('/api/entities/:entity/:id', async (request, response, next) => {
     }
 
     const canEditOwn = ['PrayerRequest', 'JournalEntry'].includes(entity) && current.created_by === request.identity.authUser.id;
-    const canEditStaff = ['PrayerRequest', 'Event', 'Sermon', 'Community', 'DailyVerse', 'DailyThought'].includes(entity)
-      && (isChurchWideStaff(request.identity)
+    const canEditStaff = ['PrayerRequest', 'Event', 'Sermon', 'DailyThought'].includes(entity)
+      && (isChurchWideStaff(request.identity) || isPastor(request.identity) && ['Sermon', 'DailyThought'].includes(entity)
         || entity === 'Event' && canManageEventScope(request.identity, current.payload))
       || ['GalleryCategory', 'GalleryPhoto'].includes(entity) && canManagePhotoGallery(request.identity)
       || entity === 'Campaign' && request.identity.roles.some((role) => CAMPAIGN_MANAGEMENT_ROLES.has(role));
@@ -5451,7 +5619,8 @@ app.patch('/api/entities/:entity/:id', async (request, response, next) => {
     const prayerParticipation = entity === 'PrayerRequest'
       && Object.keys(body || {}).every((key) => ['prayed_by', 'prayer_count'].includes(key))
       && Object.keys(body || {}).length > 0;
-    if (!canEditOwn && !canEditStaff && !canEditOrganization && !prayerParticipation) {
+    const canEditCommunity = entity === 'Community' && isSystemAdministrator(request.identity);
+    if (!canEditOwn && !canEditStaff && !canEditCommunity && !canEditOrganization && !prayerParticipation) {
       response.status(403).json({ error: 'Vous n’avez pas les droits pour modifier ce contenu.' });
       return;
     }
@@ -5468,7 +5637,18 @@ app.patch('/api/entities/:entity/:id', async (request, response, next) => {
       response.status(400).json({ error: 'Le réglage de confidentialité est invalide.' });
       return;
     }
-    if (entity === 'DailyThought') Object.assign(payload, validateDailyThought({ ...current.payload, ...payload }));
+    if (entity === 'DailyThought') Object.assign(payload, validateDailyThought({ ...current.payload, ...payload }, { requireImage: true }));
+    if (entity === 'Community') {
+      const updatedCommunity = { ...current.payload, ...payload };
+      if (typeof updatedCommunity.name !== 'string' || !updatedCommunity.name.trim() || updatedCommunity.name.length > 200
+        || (updatedCommunity.address?.length || 0) > 500 || (updatedCommunity.pastor_name?.length || 0) > 150
+        || (updatedCommunity.logo_url && !isSafeWebUrl(updatedCommunity.logo_url, { allowRelative: true }))
+        || (updatedCommunity.member_count !== undefined && (!Number.isInteger(Number(updatedCommunity.member_count)) || Number(updatedCommunity.member_count) < 0))
+        || (updatedCommunity.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updatedCommunity.contact_email))) {
+        response.status(400).json({ error: 'Le nom, l’adresse, le pasteur ou l’image de la communauté est invalide.' }); return;
+      }
+      for (const key of Object.keys(payload)) payload[key] = updatedCommunity[key];
+    }
     if (entity === 'GalleryCategory') {
       const validatedCategory = { ...current.payload, ...payload };
       validateGalleryCategoryPayload(validatedCategory);
@@ -5611,7 +5791,7 @@ app.delete('/api/entities/Team/:id', async (request, response, next) => {
 app.delete('/api/entities/:entity/:id', async (request, response, next) => {
   try {
     const { entity, id } = request.params;
-    if (!['DailyThought', 'Event', 'GalleryCategory', 'GalleryPhoto', 'Sermon', 'Group'].includes(entity)) {
+    if (!['DailyThought', 'Event', 'GalleryCategory', 'GalleryPhoto', 'Sermon', 'Group', 'Community'].includes(entity)) {
       response.status(404).json({ error: 'Cette suppression n’est pas prise en charge.' });
       return;
     }
@@ -5627,7 +5807,7 @@ app.delete('/api/entities/:entity/:id', async (request, response, next) => {
       return;
     }
     const canDelete = entity === 'DailyThought'
-      ? isChurchWideStaff(request.identity)
+      ? isChurchWideStaff(request.identity) || isPastor(request.identity)
       : entity === 'Event'
         ? isChurchWideStaff(request.identity) || canManageEventScope(request.identity, current.payload)
       : ['GalleryCategory', 'GalleryPhoto'].includes(entity)

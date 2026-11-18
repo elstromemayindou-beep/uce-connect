@@ -20,11 +20,6 @@ export default function Home() {
   const { t } = useLanguage();
   const reduceMotion = useReducedMotion();
   const { data: branding = {} } = useQuery({ queryKey: ['app-branding'], queryFn: () => appClient.settings.branding() });
-  const { data: user } = useQuery({ queryKey: ['me'], queryFn: () => appClient.auth.me() });
-  const { data: activity = {} } = useQuery({
-    queryKey: ['my-activity'],
-    queryFn: () => appClient.auth.activity(),
-  });
   const { data: verses = [] } = useQuery({ queryKey: ['daily-verse'], queryFn: () => appClient.entities.DailyVerse.list('-created_date', 1) });
   const { data: events = [] } = useQuery({
     queryKey: ['upcoming-events'],
@@ -40,8 +35,6 @@ export default function Home() {
 
   const verse = verses[0];
   const upcomingEvents = events.filter((event) => isUpcomingEvent(event)).slice(0, 6);
-  const nextLesson = activity.lessons?.find((lesson) => !lesson.opened_at) || activity.lessons?.[0];
-  const activePrayerCount = activity.prayers?.filter((prayer) => prayer.status !== 'answered').length || 0;
   const currentThought = thoughts.find((thought) => isCurrentDailyThought(thought));
   const archivedThoughts = thoughts.filter((thought) => thought.id !== currentThought?.id);
 
@@ -116,46 +109,6 @@ export default function Home() {
         <div aria-hidden="true" className="pointer-events-none absolute -left-40 top-16 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
         <div aria-hidden="true" className="pointer-events-none absolute -right-40 top-[45%] h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative z-10">
-      <section aria-labelledby="personal-space-title" className="mx-auto mb-16 -mt-14 max-w-6xl px-4 md:px-8">
-        <div className="relative overflow-hidden rounded-[2rem] border border-white/60 bg-card/90 p-5 shadow-[0_24px_80px_-30px_rgba(31,41,99,.28)] backdrop-blur-2xl dark:border-white/10 dark:bg-card/90 sm:p-8">
-          <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-20 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-          <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-amber-400/10 blur-3xl" />
-          <div className="relative mb-6 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-primary"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Votre espace</p>
-              <h2 id="personal-space-title" className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">Bonjour{user?.full_name ? ` ${user.full_name.split(' ')[0]}` : ''} 👋</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Votre prochaine étape dans la communauté, en un coup d’œil.</p>
-            </div>
-            <Link to="/profile" className="group inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-4 py-2.5 text-xs font-bold text-foreground transition hover:border-primary/30 hover:text-primary">Mon profil <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" /></Link>
-          </div>
-          <div className="relative grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Link to="/bible" className="group relative overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 transition duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg">
-              <span className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-md shadow-primary/20"><BookOpen className="h-5 w-5" /></span>
-              <p className="font-extrabold">Mon parcours biblique</p>
-              <p className="mt-1 text-xs text-muted-foreground">{user?.bible_reading?.plan_id ? 'Continuer ma lecture' : 'Choisir un parcours et progresser'}</p>
-              <ArrowUpRight className="absolute right-4 top-4 h-4 w-4 text-primary/50 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
-            </Link>
-            {upcomingEvents[0] && <Link to="/events" className="group relative overflow-hidden rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-4 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30 hover:shadow-lg">
-              <span className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20"><CalendarDays className="h-5 w-5" /></span>
-              <p className="line-clamp-1 font-extrabold">{upcomingEvents[0].title}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{upcomingEvents[0].date ? format(new Date(`${upcomingEvents[0].date.slice(0, 10)}T12:00:00`), 'd MMMM', { locale: fr }) : 'Prochain événement'}</p>
-              <ArrowUpRight className="absolute right-4 top-4 h-4 w-4 text-emerald-700/50 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-emerald-700" />
-            </Link>}
-            {nextLesson && <Link to="/studies" className="group relative overflow-hidden rounded-2xl border border-violet-500/15 bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent p-4 transition duration-300 hover:-translate-y-1 hover:border-violet-500/30 hover:shadow-lg">
-              <span className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white shadow-md shadow-violet-600/20"><BookOpen className="h-5 w-5" /></span>
-              <p className="line-clamp-1 font-extrabold">{nextLesson.title}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{nextLesson.group_title || 'Formation biblique'} · {nextLesson.opened_at ? 'Déjà consulté' : 'À découvrir'}</p>
-              <ArrowUpRight className="absolute right-4 top-4 h-4 w-4 text-violet-700/50 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-violet-700" />
-            </Link>}
-            <Link to="/prayers" className="group relative overflow-hidden rounded-2xl border border-rose-500/15 bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-transparent p-4 transition duration-300 hover:-translate-y-1 hover:border-rose-500/30 hover:shadow-lg">
-              <span className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white shadow-md shadow-rose-600/20"><Heart className="h-5 w-5" /></span>
-              <p className="font-extrabold">Mes prières</p>
-              <p className="mt-1 text-xs text-muted-foreground">{activePrayerCount ? `${activePrayerCount} demande${activePrayerCount > 1 ? 's' : ''} en cours` : 'Partager un sujet ou une reconnaissance'}</p>
-              <ArrowUpRight className="absolute right-4 top-4 h-4 w-4 text-rose-700/50 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-rose-700" />
-            </Link>
-          </div>
-        </div>
-      </section>
       {currentThought && <motion.section
         aria-labelledby="daily-thought-title"
         className="mx-auto mb-12 mt-8 max-w-5xl px-4 md:px-8"
@@ -164,7 +117,16 @@ export default function Home() {
         whileInView="visible"
         viewport={{ once: true, amount: 0.15 }}
       >
-        <div className="relative isolate overflow-hidden rounded-[2rem] border border-border/70 bg-card/80 shadow-elev-3">
+        {currentThought.image_url ? (
+          <div className="overflow-hidden rounded-[2rem] border border-border/70 bg-slate-950 shadow-elev-3">
+            <img src={currentThought.image_url} alt={currentThought.title || 'Pensée du jour'} className="mx-auto max-h-[75vh] w-full object-contain" />
+            {(currentThought.title || currentThought.content || currentThought.author) && <div className="space-y-2 p-5 text-white sm:p-7">
+              {currentThought.title && <h2 id="daily-thought-title" className="text-xl font-black sm:text-2xl">{currentThought.title}</h2>}
+              {currentThought.content && <p className="max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-white/85 sm:text-base">{currentThought.content}</p>}
+              {currentThought.author && <p className="border-t border-white/15 pt-3 text-sm font-bold text-amber-200">— {currentThought.author}</p>}
+            </div>}
+          </div>
+        ) : <div className="relative isolate overflow-hidden rounded-[2rem] border border-border/70 bg-card/80 shadow-elev-3">
           <img src={dailyThoughtImage} alt="" className="absolute inset-0 z-0 h-full w-full object-cover" />
           <div className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-950/90 via-primary/85 to-violet-950/90" />
           <div className="relative z-10 p-5 text-white sm:p-8">
@@ -178,7 +140,7 @@ export default function Home() {
             <p className="max-w-3xl whitespace-pre-wrap text-base font-medium leading-relaxed text-white/95 sm:text-lg">{currentThought.content}</p>
             {currentThought.author && <p className="mt-5 border-t border-white/15 pt-4 text-sm font-bold text-amber-100">— {currentThought.author}</p>}
           </div>
-        </div>
+        </div>}
       </motion.section>}
 
       {archivedThoughts.length > 0 && (
@@ -188,6 +150,7 @@ export default function Home() {
             <div className="mt-4 space-y-3">
               {archivedThoughts.map((thought) => (
                 <article key={thought.id} className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                  {thought.image_url && <img src={thought.image_url} alt={thought.title || 'Pensée archivée'} className="mb-3 max-h-96 w-full rounded-xl bg-slate-950 object-contain" />}
                   <h3 className="font-bold">{thought.title}</h3>
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{thought.content}</p>
                   <p className="mt-3 text-xs font-semibold text-primary">{thought.author || 'Église UCE'} · {thought.created_date ? format(new Date(thought.created_date), 'd MMMM yyyy · HH:mm', { locale: fr }) : ''}</p>

@@ -34,6 +34,7 @@ export function isSystemAdministrator(user) {
 
 export function canManageNotifications(user) {
   const assignments = Array.isArray(user?.role_assignments) ? user.role_assignments : [];
+  if (user?.roles?.includes('PASTEUR_PRINCIPAL') && !isSystemAdministrator(user)) return false;
   return isSystemAdministrator(user)
     || assignments.some((assignment) => assignment.department?.code === 'COM'
       && (assignment.scope === 'departement'

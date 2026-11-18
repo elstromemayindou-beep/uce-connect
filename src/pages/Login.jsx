@@ -54,12 +54,22 @@ export default function Login() {
       if (loginMethod === 'phone' && !isRecovery && !/^\+[1-9]\d{7,14}$/.test(phone.trim())) {
         throw new Error('Saisis le numéro au format international, par exemple +242061234567.');
       }
-      const { error } = isRecovery
-        ? await supabase.auth.updateUser({ password })
-        : await supabase.auth.signInWithPassword(loginMethod === 'phone'
-          ? { phone: phone.trim(), password }
-          : { email: email.trim(), password });
-      if (error) throw error;
+      if (isRecovery) {
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+      } else if (loginMethod === 'phone') {
+        const response = await fetch('/api/auth/login-phone', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: phone.trim(), password }),
+        });
+        const session = await response.json();
+        if (!response.ok) throw new Error(session?.error || 'Connexion impossible.');
+        const { error } = await supabase.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+      }
       toast.success(isRecovery ? 'Mot de passe mis à jour.' : 'Connexion réussie.');
       if (isRecovery) {
         setIsRecovery(false);

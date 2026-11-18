@@ -42,14 +42,14 @@ const workspaces = [
     id: 'audit',
     label: 'Historique des actions',
     description: 'Consulter les changements administratifs et financiers importants.',
-    roles: ['SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL', 'TRESORIER', 'CONTROLEUR_FIN'],
+    roles: ['SUPER_ADMIN', 'ADMIN_GENERAL', 'TRESORIER', 'CONTROLEUR_FIN'],
     path: '/admin/audit',
     icon: History,
   },
   {
     id: 'members',
-    label: 'Gestion des membres',
-    description: 'Ajouter, modifier, archiver et suivre les membres actifs.',
+    label: 'Annuaire des membres',
+    description: 'Consulter les membres de l’église.',
     roles: ['SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL', 'GESTIONNAIRE_MEMBRES'],
     path: '/admin/members',
     icon: Users,
@@ -74,9 +74,17 @@ const workspaces = [
     id: 'gallery',
     label: 'Photothèque',
     description: 'Publier et organiser les photos des cultes.',
-    roles: ['SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL', 'SECRETAIRE_GENERAL'],
+    roles: ['SUPER_ADMIN', 'ADMIN_GENERAL', 'SECRETAIRE_GENERAL'],
     path: '/admin/gallery',
     icon: Images,
+  },
+  {
+    id: 'role-requests', label: 'Demandes de responsables', description: 'Proposer des responsables à valider par l’administration générale.',
+    roles: ['PASTEUR_PRINCIPAL'], path: '/admin/role-requests', icon: UserCog,
+  },
+  {
+    id: 'organization', label: 'Départements et commissions', description: 'Gérer la structure de l’église.',
+    roles: ['PASTEUR_PRINCIPAL'], path: '/admin/groups', icon: Network,
   },
 ];
 const departmentRoleCodes = ['RESP_DEPARTEMENT', 'SECRETAIRE_DEPARTEMENT', 'MONITEUR_ECOLE_DIMANCHE'];
@@ -216,13 +224,14 @@ function GeneralAdminDashboard() {
     queryFn: () => appClient.organization.tree(),
   });
   const { data: users = [] } = useQuery({ queryKey: ['admin-users'], queryFn: () => appClient.entities.User.list() });
-  const { data: events = [] } = useQuery({ queryKey: ['admin-events'], queryFn: () => appClient.entities.Event.list('date', 500) });
-  const { data: prayers = [] } = useQuery({ queryKey: ['admin-prayers'], queryFn: () => appClient.entities.PrayerRequest.list() });
-  const { data: communities = [] } = useQuery({ queryKey: ['admin-communities'], queryFn: () => appClient.entities.Community.list() });
-  const { data: sermons = [] } = useQuery({ queryKey: ['admin-sermons'], queryFn: () => appClient.entities.Sermon.list() });
-  const upcomingEvents = events.filter((event) => isUpcomingEvent(event));
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const isAdministrator = isSystemAdministrator(user);
+  const isPastor = roles.includes('PASTEUR_PRINCIPAL');
+  const { data: events = [] } = useQuery({ queryKey: ['admin-events'], queryFn: () => appClient.entities.Event.list('date', 500), enabled: isAdministrator });
+  const { data: prayers = [] } = useQuery({ queryKey: ['admin-prayers'], queryFn: () => appClient.entities.PrayerRequest.list(), enabled: isAdministrator });
+  const { data: communities = [] } = useQuery({ queryKey: ['admin-communities'], queryFn: () => appClient.entities.Community.list(), enabled: isAdministrator });
+  const { data: sermons = [] } = useQuery({ queryKey: ['admin-sermons'], queryFn: () => appClient.entities.Sermon.list() });
+  const upcomingEvents = events.filter((event) => isUpcomingEvent(event));
   const hasAnyRole = (...allowedRoles) => roles.some((role) => allowedRoles.includes(role));
   const canManageChurch = hasAnyRole('SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL');
   const moduleSections = [
@@ -232,21 +241,15 @@ function GeneralAdminDashboard() {
       modules: [
         ...(hasAnyRole('SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL', 'GESTIONNAIRE_MEMBRES')
           ? [{
-            label: 'Gestion des membres',
-            description: 'Créer les fiches, mettre à jour les informations et suivre les membres actifs.',
+            label: hasAnyRole('PASTEUR_PRINCIPAL') && !isAdministrator ? 'Annuaire des membres' : 'Gestion des membres',
+            description: isAdministrator || hasAnyRole('GESTIONNAIRE_MEMBRES') ? 'Créer les fiches et mettre à jour les informations.' : 'Consulter la liste des membres de l’église.',
             path: '/admin/members',
             icon: Users,
             accent: 'bg-sky-500/10 text-sky-600',
           }]
           : []),
-        ...(canManageChurch
+        ...(isAdministrator
           ? [{
-            label: 'Groupes, départements et commissions',
-            description: 'Organiser les groupes et maintenir la structure de l’église.',
-            path: '/admin/groups',
-            icon: Network,
-            accent: 'bg-violet-500/10 text-violet-600',
-          }, {
             label: 'Rôles et affectations',
             description: 'Attribuer les rôles et définir leur périmètre de responsabilité.',
             path: '/admin/organisation',
@@ -266,6 +269,8 @@ function GeneralAdminDashboard() {
             accent: 'bg-cyan-500/10 text-cyan-600',
           }]
           : []),
+        ...(hasAnyRole('PASTEUR_PRINCIPAL') ? [{ label: 'Demandes de responsables', description: 'Proposer un responsable de département à valider par l’administration générale.', path: '/admin/role-requests', icon: UserCog, accent: 'bg-indigo-500/10 text-indigo-600' }] : []),
+        ...(canManageChurch ? [{ label: 'Départements et commissions', description: 'Organiser les départements et commissions de l’église.', path: '/admin/groups', icon: Network, accent: 'bg-violet-500/10 text-violet-600' }] : []),
         ...(isAdministrator || hasAnyRole('TRESORIER', 'CONTROLEUR_FIN')
           ? [{
             label: 'Trésorerie et comptabilité',
@@ -290,7 +295,7 @@ function GeneralAdminDashboard() {
       title: 'Activités et communication',
       description: 'Publier les activités, accompagner les membres et communiquer les annonces.',
       modules: [
-        ...(hasAnyRole('SUPER_ADMIN', 'ADMIN_GENERAL', 'PASTEUR_PRINCIPAL', 'SECRETAIRE_GENERAL')
+        ...(hasAnyRole('SUPER_ADMIN', 'ADMIN_GENERAL', 'SECRETAIRE_GENERAL')
           ? [{
             label: 'Événements',
             description: 'Publier les programmes, affiches, dates et lieux des activités.',
@@ -299,27 +304,25 @@ function GeneralAdminDashboard() {
             accent: 'bg-amber-500/10 text-amber-600',
           }]
           : []),
-        ...(canManageChurch
+        ...(isAdministrator || hasAnyRole('PASTEUR_PRINCIPAL')
           ? [{
             label: 'Prédications et médias',
-            description: 'Gérer les contenus audio, vidéo, enseignements et directs passés.',
+            description: 'Publier et organiser les prédications de l’église.',
             path: '/admin/content?tab=sermons',
             icon: BookOpen,
             accent: 'bg-orange-500/10 text-orange-600',
-          }, {
+          }]
+          : []),
+        ...(isAdministrator
+          ? [{
             label: 'Directs du culte',
             description: 'Programmer et mettre à jour les liens des prochains cultes en direct.',
             path: '/admin/live',
             icon: Radio,
             accent: 'bg-rose-500/10 text-rose-600',
-          }, {
-            label: 'Formations bibliques',
-            description: 'Créer les parcours privés et suivre les cours des participants.',
-            path: '/admin/studies',
-            icon: LockKeyhole,
-            accent: 'bg-blue-500/10 text-blue-600',
           }]
           : []),
+        ...(isAdministrator || hasAnyRole('PASTEUR_PRINCIPAL') ? [{ label: 'Formations bibliques', description: 'Créer des formations privées et suivre leurs participants.', path: '/admin/studies', icon: LockKeyhole, accent: 'bg-blue-500/10 text-blue-600' }] : []),
         ...(canManageNotifications(user)
           ? [{
             label: 'Notifications téléphone',
@@ -329,7 +332,7 @@ function GeneralAdminDashboard() {
             accent: 'bg-cyan-500/10 text-cyan-600',
           }]
           : []),
-        ...(canManageChurch
+        ...(isAdministrator
           ? [{
             label: 'Quiz biblique et récompenses',
             description: 'Gérer les questions, les niveaux, les cadeaux et les demandes des membres.',
@@ -345,6 +348,12 @@ function GeneralAdminDashboard() {
       description: 'Centraliser les réglages visuels et les informations présentées aux membres.',
       modules: hasAnyRole('SUPER_ADMIN', 'ADMIN_GENERAL')
         ? [{
+          label: 'Communautés',
+          description: 'Ajouter et mettre à jour les informations des communautés UCE.',
+          path: '/communities',
+          icon: Church,
+          accent: 'bg-purple-500/10 text-purple-600',
+        }, {
           label: 'Design et identité de l’application',
           description: 'Modifier le logo, les images, les couleurs, la police et les responsables.',
           path: '/admin/design',
@@ -375,7 +384,7 @@ function GeneralAdminDashboard() {
     );
   }
 
-  const stats = [
+  const adminStats = [
     { label: 'Membres', value: users.length, icon: Users, gradient: 'from-blue-500 to-blue-600', path: '/admin/members' },
     { label: 'Communautés', value: communities.length, icon: Church, gradient: 'from-purple-500 to-purple-600', path: '/communities' },
     { label: 'Événements à venir', value: upcomingEvents.length, icon: Calendar, gradient: 'from-green-500 to-green-600', path: '/admin/content?tab=events' },
@@ -383,6 +392,7 @@ function GeneralAdminDashboard() {
     { label: 'Prédications', value: sermons.length, icon: BookOpen, gradient: 'from-amber-500 to-amber-600', path: '/admin/content?tab=sermons' },
     { label: 'Prières', value: prayers.length, icon: Heart, gradient: 'from-red-500 to-red-600', path: '/prayers' },
   ];
+  const stats = isAdministrator ? adminStats : isPastor ? adminStats.filter((item) => ['Membres', 'Prédications'].includes(item.label)) : [];
 
   return (
     <div className="min-h-screen">
@@ -555,6 +565,7 @@ function GeneralAdminDashboard() {
           </div>
 
           {/* Upcoming events */}
+          {isAdministrator && <>
           <div className="bg-card border border-border/50 rounded-3xl p-6">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-black text-lg flex items-center gap-2">
@@ -589,9 +600,11 @@ function GeneralAdminDashboard() {
               ))}
             </div>
           </div>
+          </>}
         </div>
 
         {/* Activity row */}
+        {isAdministrator && <>
         <div className="bg-card border border-border/50 rounded-3xl p-6">
           <h3 className="font-black text-lg flex items-center gap-2 mb-5">
             <TrendingUp className="w-5 h-5 text-primary" />Demandes de prière récentes
@@ -612,6 +625,7 @@ function GeneralAdminDashboard() {
             ))}
           </div>
         </div>
+        </>}
       </div>
     </div>
   );

@@ -24,6 +24,7 @@ export default function OrganizationManagement() {
   const { data: groups = [], isLoading: groupsLoading } = useQuery({
     queryKey: ['groups'],
     queryFn: () => appClient.entities.Group.list(),
+    enabled: Boolean(user?.roles?.some((role) => ['SUPER_ADMIN', 'ADMIN_GENERAL'].includes(role))),
   });
   const { data: structure = [], isLoading: structureLoading, isError } = useQuery({
     queryKey: ['organization-structure'],
@@ -109,7 +110,7 @@ export default function OrganizationManagement() {
         <p className="mt-2 text-sm text-muted-foreground">Les suppressions de structure sont des archivages : l’historique des affectations est conservé.</p>
       </header>
 
-      <section className="glass-panel space-y-4 rounded-3xl p-5">
+      {user?.roles?.some((role) => ['SUPER_ADMIN', 'ADMIN_GENERAL'].includes(role)) && <section className="glass-panel space-y-4 rounded-3xl p-5">
         <h2 className="flex items-center gap-2 text-xl font-black"><Users className="h-5 w-5 text-primary" />Groupes</h2>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); groupMutation.mutate(); }}>
           <div className="space-y-2"><Label htmlFor="group-name">Nom du groupe</Label><Input id="group-name" required maxLength={160} value={groupDraft.name} onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })} /></div>
@@ -126,7 +127,7 @@ export default function OrganizationManagement() {
             </article>)}
           </div>
         )}
-      </section>
+      </section>}
 
       <section className="glass-panel space-y-4 rounded-3xl p-5">
         <h2 className="flex items-center gap-2 text-xl font-black"><Building2 className="h-5 w-5 text-primary" />Départements</h2>
