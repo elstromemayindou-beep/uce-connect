@@ -8,6 +8,7 @@ ALTER TABLE public.uce_app_records
   CHECK (entity_type IN (
     'Campaign',
     'Community',
+    'DailyThought',
     'DailyVerse',
     'Donation',
     'Event',
