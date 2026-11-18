@@ -3,7 +3,7 @@ services:
     name: uce-connect
     runtime: node
     plan: free
-    buildCommand: npm ci && npx prisma generate && npm run build
+    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
     startCommand: npm run start:server
     healthCheckPath: /api/health
     envVars:
