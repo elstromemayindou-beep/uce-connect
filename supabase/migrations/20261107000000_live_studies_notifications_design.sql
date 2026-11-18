@@ -136,10 +136,12 @@ $$;
 REVOKE ALL ON FUNCTION public.uce_active_profile_in_church(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.uce_active_profile_in_church(uuid) TO authenticated;
 
+DROP POLICY IF EXISTS uce_livestreams_authenticated_read ON public.uce_livestreams;
 CREATE POLICY uce_livestreams_authenticated_read
   ON public.uce_livestreams FOR SELECT TO authenticated
   USING (public.uce_active_profile_in_church(uce_livestreams.eglise_id));
 
+DROP POLICY IF EXISTS uce_study_groups_private_read ON public.uce_study_groups;
 CREATE POLICY uce_study_groups_private_read
   ON public.uce_study_groups FOR SELECT TO authenticated
   USING (
@@ -155,11 +157,13 @@ CREATE POLICY uce_study_groups_private_read
     )
   );
 
+DROP POLICY IF EXISTS uce_study_group_members_self_read ON public.uce_study_group_members;
 CREATE POLICY uce_study_group_members_self_read
   ON public.uce_study_group_members FOR SELECT TO authenticated
   USING (profile_id = auth.uid()
     AND public.uce_active_profile_in_church(uce_study_group_members.eglise_id));
 
+DROP POLICY IF EXISTS uce_study_lessons_private_read ON public.uce_study_lessons;
 CREATE POLICY uce_study_lessons_private_read
   ON public.uce_study_lessons FOR SELECT TO authenticated
   USING (
@@ -180,6 +184,7 @@ CREATE POLICY uce_study_lessons_private_read
     )
   );
 
+DROP POLICY IF EXISTS uce_notifications_recipient_read ON public.uce_notifications;
 CREATE POLICY uce_notifications_recipient_read
   ON public.uce_notifications FOR SELECT TO authenticated
   USING (
@@ -192,6 +197,7 @@ CREATE POLICY uce_notifications_recipient_read
     )
   );
 
+DROP POLICY IF EXISTS uce_notification_recipients_self_read ON public.uce_notification_recipients;
 CREATE POLICY uce_notification_recipients_self_read
   ON public.uce_notification_recipients FOR SELECT TO authenticated
   USING (
