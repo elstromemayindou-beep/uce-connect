@@ -27,10 +27,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS uce_app_records_id_eglise_unique_idx
   ON public.uce_app_records (id, eglise_id);
 
 ALTER TABLE public.uce_notifications
+  DROP CONSTRAINT IF EXISTS fk_uce_notifications_source_event;
+ALTER TABLE public.uce_notifications
   ADD CONSTRAINT fk_uce_notifications_source_event
   FOREIGN KEY (source_event_id, eglise_id)
   REFERENCES public.uce_app_records(id, eglise_id) ON DELETE CASCADE;
 
+ALTER TABLE public.uce_notifications
+  DROP CONSTRAINT IF EXISTS fk_uce_notifications_source_profile;
 ALTER TABLE public.uce_notifications
   ADD CONSTRAINT fk_uce_notifications_source_profile
   FOREIGN KEY (source_profile_id, eglise_id)
@@ -41,10 +45,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS uce_notifications_event_reminder_unique_idx
   WHERE source_event_id IS NOT NULL AND source_profile_id IS NOT NULL;
 
 ALTER TABLE public.uce_event_registrations
+  DROP CONSTRAINT IF EXISTS fk_uce_event_registrations_event_church;
+ALTER TABLE public.uce_event_registrations
   ADD CONSTRAINT fk_uce_event_registrations_event_church
   FOREIGN KEY (event_id, eglise_id)
   REFERENCES public.uce_app_records(id, eglise_id) ON DELETE CASCADE;
 
+ALTER TABLE public.uce_event_registrations
+  DROP CONSTRAINT IF EXISTS fk_uce_event_registrations_profile_church;
 ALTER TABLE public.uce_event_registrations
   ADD CONSTRAINT fk_uce_event_registrations_profile_church
   FOREIGN KEY (profile_id, eglise_id)
